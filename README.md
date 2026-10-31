@@ -76,7 +76,7 @@
 
 ```powershell
 # 1. استنساخ المستودع
-git clone https://github.com/YOUR_USERNAME/nook-enhanced.git
+git clone https://github.com/keera249/nook-enhanced.git
 cd nook-enhanced
 
 # 2. تثبيت الإضافات في مجلد إعدادات Nook
