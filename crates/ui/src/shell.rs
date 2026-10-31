@@ -263,6 +263,13 @@ impl Shell {
             if open { expanded.y } else { rest.y },
             SpringParams::with_overshoot(220.0, 0.04),
         );
+        let collapsed_h = anim::spring_from(
+            &ctx,
+            self.id.with("ch"),
+            m.collapsed.y,
+            rest.y,
+            SpringParams::with_overshoot(220.0, 0.04),
+        );
         let opacity = anim::spring_from(
             &ctx,
             self.id.with("opacity"),
@@ -273,8 +280,10 @@ impl Shell {
         .clamp(0.0, 1.0);
 
         // Progress is measured against the regular panel, so a taller page
-        // reads as fully open (1.0) instead of re-running the morph.
-        let mut progress = ((h - m.collapsed.y) / (m.expanded.y - m.collapsed.y)).max(0.0);
+        // reads as fully open (1.0) instead of re-running the morph, and
+        // morphing between normal pill and mini-pill stays at progress 0.
+        let base_h = collapsed_h.max(m.collapsed.y);
+        let mut progress = ((h - base_h) / (m.expanded.y - base_h).max(1.0)).max(0.0);
         if expanded.y > m.expanded.y {
             progress = progress.min(1.0);
         }

@@ -206,14 +206,23 @@ fn run(
                     None
                 }
             });
+        let need_art_retry = snapshot
+            .as_ref()
+            .is_some_and(|s| s.playing && s.art.is_none());
         if out.send(snapshot).is_err() {
             return Ok(());
         }
         on_change();
 
         // Sleep until something changes; a slow refresh covers apps that
-        // forget to raise events.
-        match rx.recv_timeout(Duration::from_secs(20)) {
+        // forget to raise events, and a short retry catches browser thumbnails
+        // (e.g. YouTube) that finish loading a moment after playback starts.
+        let timeout = if need_art_retry {
+            Duration::from_millis(600)
+        } else {
+            Duration::from_secs(20)
+        };
+        match rx.recv_timeout(timeout) {
             Ok(msg) => {
                 // Events come in bursts (title, art and playback together).
                 std::thread::sleep(Duration::from_millis(40));
@@ -265,7 +274,7 @@ fn snapshot(
 
     let key = (title.clone(), artist.clone(), album);
     let art = match art_cache {
-        Some((k, art)) if *k == key => art.clone(),
+        Some((k, Some(art))) if *k == key => Some(art.clone()),
         _ => {
             let art = load_art(&props)
                 .inspect_err(|e| tracing::debug!("album art: {e}"))

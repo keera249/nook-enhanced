@@ -1,0 +1,9 @@
+id          = "power-mode"
+name        = "Power & Performance"
+icon        = "lightning"
+size        = "wide"
+run         = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "power.ps1"]
+page_size   = [540, 310]
+description = "Switch between Gaming Best Performance, Ultimate Performance, Balanced, and Power Saver modes in one click."
+author      = "you"
+version     = "1.0.0"

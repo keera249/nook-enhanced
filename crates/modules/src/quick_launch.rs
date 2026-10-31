@@ -47,8 +47,8 @@ impl Item {
     }
 }
 
-fn list_file() -> Option<PathBuf> {
-    kit::settings_path("launch.txt")
+fn list_file(file_name: &str) -> Option<PathBuf> {
+    kit::settings_path(file_name)
 }
 
 fn windir() -> PathBuf {
@@ -193,8 +193,10 @@ fn spawn_iconer(ctx: egui::Context) -> Option<Iconer> {
         .map(|_| (req_tx, rx))
 }
 
-#[derive(Default)]
 pub struct QuickLaunch {
+    id: &'static str,
+    title: &'static str,
+    file_name: &'static str,
     items: Vec<Item>,
     iconer: Option<Iconer>,
     pending: Vec<Icon>,
@@ -209,9 +211,38 @@ pub struct QuickLaunch {
     toast: Option<(String, Instant)>,
 }
 
+impl Default for QuickLaunch {
+    fn default() -> Self {
+        Self::with_meta("quick_launch", "Quick launch", "launch.txt")
+    }
+}
+
 impl QuickLaunch {
+    pub fn second() -> Self {
+        Self::with_meta("quick_launch_2", "Quick launch 2", "launch2.txt")
+    }
+
+    fn with_meta(id: &'static str, title: &'static str, file_name: &'static str) -> Self {
+        Self {
+            id,
+            title,
+            file_name,
+            items: Vec::new(),
+            iconer: None,
+            pending: Vec::new(),
+            draft: String::new(),
+            editing: false,
+            drag: None,
+            open_page: false,
+            page_seen: None,
+            picker: None,
+            ctx: None,
+            toast: None,
+        }
+    }
+
     fn save(&self) {
-        let Some(path) = list_file() else {
+        let Some(path) = list_file(self.file_name) else {
             return;
         };
         if let Some(dir) = path.parent() {
@@ -331,7 +362,7 @@ impl QuickLaunch {
             if r.max.y > area.max.y + 1.0 {
                 break;
             }
-            let id = Id::new(("launch-card", i));
+            let id = Id::new((self.id, "launch-card", i));
             let sense = if self.editing {
                 Sense::click_and_drag()
             } else {
@@ -451,7 +482,7 @@ impl QuickLaunch {
         );
         let add = Rect::from_min_size(pos2(bar.max.x - 88.0, bar.min.y), vec2(88.0, bar.height()));
         let field = Rect::from_min_max(bar.min, pos2(browse.min.x - 8.0, bar.max.y));
-        let id = Id::new(FIELD_ID);
+        let id = Id::new((self.id, FIELD_ID));
         let resp = kit::field(
             ui,
             field,
@@ -528,11 +559,11 @@ fn icon_hit(ui: &mut Ui, rect: Rect, id: Id) -> egui::Response {
 
 impl Module for QuickLaunch {
     fn id(&self) -> &'static str {
-        "quick_launch"
+        self.id
     }
 
     fn name(&self) -> &str {
-        "Quick launch"
+        self.title
     }
 
     fn icon(&self) -> &'static str {
@@ -545,7 +576,7 @@ impl Module for QuickLaunch {
 
     fn attach(&mut self, ctx: &egui::Context) {
         self.ctx = Some(ctx.clone());
-        match list_file().and_then(|p| std::fs::read_to_string(p).ok()) {
+        match list_file(self.file_name).and_then(|p| std::fs::read_to_string(p).ok()) {
             Some(text) => {
                 self.items = text
                     .lines()
@@ -621,7 +652,7 @@ impl Module for QuickLaunch {
                     rect.min.y + ch * ((i / cols) as f32 + 0.5),
                 );
                 let r = Rect::from_center_size(c, vec2(side, side));
-                let id = Id::new(("launch-tile-icon", i));
+                let id = Id::new((self.id, "launch-tile-icon", i));
                 let resp = icon_hit(ui, r, id);
                 let h = anim::tween(ui.ctx(), id.with("h"), resp.hovered(), 0.1);
                 if h > 0.0 {

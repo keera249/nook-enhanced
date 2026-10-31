@@ -168,6 +168,8 @@ pub enum Kind {
         mono: bool,
     },
     Icon {
+        #[serde(default)]
+        id: Option<String>,
         icon: String,
         size: Option<f32>,
         color: Option<String>,
@@ -175,6 +177,8 @@ pub enum Kind {
         fill: bool,
     },
     Image {
+        #[serde(default)]
+        id: Option<String>,
         /// A PNG, JPG or BMP file, absolute or relative to the plugin folder.
         path: Option<String>,
         /// Or the file's bytes in base64.

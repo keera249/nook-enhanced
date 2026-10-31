@@ -633,7 +633,13 @@ impl Module for Plugin {
         let theme = ctx.theme;
         self.sync_theme(theme);
         let rect = ui.max_rect();
-        let size = self.manifest().size;
+        let size = if rect.height() > 80.0 {
+            TileSize::Large
+        } else if rect.width() > rect.height() * 1.5 {
+            TileSize::Wide
+        } else {
+            TileSize::Small
+        };
         if self.tile_layout != Some((size, rect.size())) {
             self.tile_layout = Some((size, rect.size()));
             let name = match size {
@@ -654,6 +660,7 @@ impl Module for Plugin {
             ui.id().with("plugin-tile"),
             Sense::click(),
         );
+        let before = self.outbox.len();
         match (&self.status, self.tile.clone()) {
             (Status::Stopped(_), _) if self.restart_at.is_none() => {
                 view::default_tile(
@@ -680,7 +687,8 @@ impl Module for Plugin {
                 view::default_tile(ui, self.icon, self.name(), "", theme, ctx.hovered);
             }
         }
-        if resp.clicked() {
+        let control_acted = self.outbox.len() > before;
+        if !control_acted && resp.clicked() {
             self.send(protocol::msg_simple("tile_click"));
             if self.page.is_some() {
                 self.page_request = true;

@@ -1,0 +1,10 @@
+id          = "game-launcher"
+name        = "Game Launcher"
+icon        = "game-controller"
+size        = "small"
+run         = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "launcher.ps1"]
+accepts_files = true
+page_size   = [596, 340]
+description = "Finds your installed Steam, Epic and GOG games by itself, or drop any game's .exe, shortcut or folder. One click to play."
+author      = "you"
+version     = "1.2.0"

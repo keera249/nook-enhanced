@@ -19,8 +19,8 @@ pub const SETTINGS_ID: &str = "settings";
 const GAP: f32 = 8.0;
 const HEADER: f32 = 28.0;
 const ROW: f32 = 28.0;
-/// Height of the Appearance and Behavior cards (title + four rows).
-const TOP_CARD: f32 = 154.0;
+/// Height of the Appearance and Behavior cards (title + five rows).
+const TOP_CARD: f32 = 182.0;
 /// Height of a collapsible card's clickable header.
 const DISCLOSURE: f32 = 44.0;
 /// Revealed height of each collapsible section's body.
@@ -246,6 +246,15 @@ pub fn page(
                 widgets::segmented(ui, &["Left", "Center", "Right"], &mut pos_idx, theme)
             }) {
                 cfg.placement = Placement::ALL[pos_idx];
+                out.changed = true;
+            }
+            let mut mini = cfg.mini_in_fullscreen;
+            if row(&mut lui, "Mini in full window", theme, |ui| {
+                widgets::toggle(ui, &mut mini, theme).on_hover_text(
+                    "Shrink the notch to a tiny pill when an app is fullscreen or maximized",
+                )
+            }) {
+                cfg.mini_in_fullscreen = mini;
                 out.changed = true;
             }
             let mut hide = cfg.hide_in_fullscreen;

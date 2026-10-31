@@ -12,7 +12,7 @@ use egui::{
     UiBuilder, pos2, vec2,
 };
 use nook_platform::media::{MediaCommand, MediaWatcher, NowPlaying};
-use nook_ui::module::{Module, TileCtx, TileSize};
+use nook_ui::module::{Badge, Module, TileCtx, TileSize};
 use nook_ui::theme::{SIZE_LABEL, Theme, with_alpha};
 use nook_ui::{icons, paint, widgets};
 use std::sync::Arc;
@@ -26,6 +26,7 @@ pub struct Media {
     now: Option<NowPlaying>,
     /// Texture for `now.art`, keyed by the art's allocation.
     art: Option<(usize, TextureHandle)>,
+    ctx: Option<egui::Context>,
 }
 
 impl Media {
@@ -109,7 +110,28 @@ impl Module for Media {
         self.now.as_ref().is_some_and(|n| n.playing)
     }
 
+    fn collapsed_badge(&self) -> Option<Badge> {
+        let n = self.now.as_ref()?;
+        if !n.playing {
+            return None;
+        }
+        let title = if !n.title.trim().is_empty() {
+            n.title.clone()
+        } else if !n.source.trim().is_empty() {
+            n.source.clone()
+        } else {
+            "Now playing".to_owned()
+        };
+        Some(Badge::Media {
+            title,
+            artist: n.artist.clone(),
+            playing: n.playing,
+            art: self.art.as_ref().map(|(_, t)| t.id()),
+        })
+    }
+
     fn attach(&mut self, ctx: &egui::Context) {
+        self.ctx = Some(ctx.clone());
         let ctx = ctx.clone();
         match MediaWatcher::spawn(move || ctx.request_repaint()) {
             Ok(w) => self.watcher = Some(w),
@@ -123,6 +145,9 @@ impl Module for Media {
             if self.now.as_ref().and_then(|n| n.art.as_ref()).is_none() {
                 self.art = None;
             }
+        }
+        if let Some(ctx) = self.ctx.clone() {
+            let _ = self.art_texture(&ctx);
         }
     }
 

@@ -1,0 +1,9 @@
+id          = "volume-mixer"
+name        = "App Volume Mixer"
+icon        = "faders"
+size        = "wide"
+run         = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "mixer.ps1"]
+page_size   = [568, 360]
+description = "Per-app volume mixer: control or mute the volume of each open game and app individually."
+author      = "you"
+version     = "1.0.0"

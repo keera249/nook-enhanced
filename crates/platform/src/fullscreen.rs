@@ -58,3 +58,57 @@ pub fn foreground_is_fullscreen(own: Hwnd) -> bool {
         mon.bounds == ours.bounds && Rect::from(r).covers(&mon.bounds)
     }
 }
+
+/// True when the foreground window on the notch's monitor is either fullscreen
+/// or maximized (or covers the monitor's work area), and false when the user
+/// is on the desktop / home screen or using a non-maximized (partial) window.
+pub fn foreground_is_full_window(own: Hwnd) -> bool {
+    if foreground_is_fullscreen(own) {
+        return true;
+    }
+    // SAFETY: read-only window queries.
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_invalid() || fg == own.get() || fg == GetShellWindow() {
+            return false;
+        }
+        if !IsWindowVisible(fg).as_bool() {
+            return false;
+        }
+        let mut pid = 0;
+        GetWindowThreadProcessId(fg, Some(&mut pid));
+        if pid == GetCurrentProcessId() {
+            return false;
+        }
+        let mut class = [0u16; 64];
+        let n = GetClassNameW(fg, &mut class).max(0) as usize;
+        let class = String::from_utf16_lossy(&class[..n]);
+        if matches!(
+            class.as_str(),
+            "WorkerW"
+                | "Progman"
+                | "Shell_TrayWnd"
+                | "Shell_SecondaryTrayWnd"
+                | "MultitaskingViewFrame"
+        ) {
+            return false;
+        }
+        let (Ok(mon), Ok(ours)) = (
+            monitor::of_window(Hwnd::from_raw(fg.0 as isize)),
+            monitor::of_window(own),
+        ) else {
+            return false;
+        };
+        if mon.bounds != ours.bounds {
+            return false;
+        }
+        if IsZoomed(fg).as_bool() {
+            return true;
+        }
+        let mut r = RECT::default();
+        if GetWindowRect(fg, &mut r).is_err() {
+            return false;
+        }
+        Rect::from(r).covers(&mon.work)
+    }
+}

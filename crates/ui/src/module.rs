@@ -21,6 +21,13 @@ pub enum Badge {
     Glyph { icon: &'static str },
     /// A pulsing dot: something arrived.
     Pulse,
+    /// Dynamic Island now-playing media (album art thumbnail, song title, waveform).
+    Media {
+        title: String,
+        artist: String,
+        playing: bool,
+        art: Option<egui::TextureId>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]

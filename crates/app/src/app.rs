@@ -750,16 +750,134 @@ fn icon_font(size: f32, fill: bool) -> FontId {
     FontId::new(size, FontFamily::Name(family.into()))
 }
 
-/// Collapsed pill: live badges from modules (ring + label on the left,
-/// glyphs and pulse dots on the right), inset by the same ink margin on
-/// both sides.
+/// Collapsed pill: live badges from modules (Dynamic Island media, ring +
+/// label on the left, glyphs and pulse dots on the right), or a sleek mini
+/// indicator when shrunk in full-window mode.
 fn draw_pill(badges: Vec<Badge>, battery: Option<Battery>, ui: &mut Ui, rect: Rect, theme: &Theme) {
-    const PAD: f32 = 15.0;
     let painter = ui.painter();
     let cy = rect.center().y;
+    let now = ui.input(|i| i.time);
+
+    // 1. iPhone Dynamic Island Now-Playing Media mode.
+    if let Some((title, _artist, playing, art)) = badges.iter().find_map(|b| match b {
+        Badge::Media {
+            title,
+            artist,
+            playing,
+            art,
+        } => Some((title.as_str(), artist.as_str(), *playing, *art)),
+        _ => None,
+    }) {
+        let compact = rect.height() < 30.0;
+        let pad_x = if compact { 7.0 } else { 9.0 };
+        let art_side = (rect.height() - if compact { 8.0 } else { 10.0 }).clamp(16.0, 24.0);
+        let art_radius = (art_side * 0.28).max(4.5);
+        let art_rect = Rect::from_center_size(
+            pos2(rect.min.x + pad_x + art_side * 0.5, cy),
+            vec2(art_side, art_side),
+        );
+        match art {
+            Some(tex) => {
+                painter.add(
+                    egui::epaint::RectShape::filled(art_rect, art_radius, Color32::WHITE)
+                        .with_texture(tex, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))),
+                );
+                painter.rect_stroke(
+                    art_rect,
+                    art_radius,
+                    egui::Stroke::new(1.0, theme::with_alpha(theme.accent, 0.45)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            None => {
+                let s = nook_ui::geometry::Squircle::new(art_rect, art_radius);
+                let (a, b) = theme.active_tile();
+                paint::fill_gradient(painter, &s.outline(), a, b);
+                paint::icon(
+                    painter,
+                    art_rect.center(),
+                    nook_ui::icons::MUSIC_NOTES,
+                    if compact { 11.0 } else { 13.0 },
+                    theme.accent_fg(),
+                    true,
+                );
+            }
+        }
+
+        // Right: 4-bar animated equalizer waveform (Dynamic Island style).
+        let bar_count = 4usize;
+        let bar_w = 2.5f32;
+        let bar_gap = 2.2f32;
+        let wave_w = bar_count as f32 * bar_w + (bar_count - 1) as f32 * bar_gap;
+        let wave_left = rect.max.x - pad_x - wave_w - 2.0;
+        let max_bar_h = (rect.height() - if compact { 12.0 } else { 18.0 }).clamp(8.0, 16.0);
+        let freqs = [6.4, 8.9, 7.3, 5.6];
+        let phases = [0.0, 1.4, 2.7, 4.1];
+        for i in 0..bar_count {
+            let amp = if playing {
+                ((now * freqs[i] + phases[i]).sin() * 0.5 + 0.5) as f32
+            } else {
+                0.15
+            };
+            let bh = (3.5 + (max_bar_h - 3.5) * amp).min(rect.height() - 6.0);
+            let bx = wave_left + i as f32 * (bar_w + bar_gap) + bar_w * 0.5;
+            let bar_rect = Rect::from_center_size(pos2(bx, cy), vec2(bar_w, bh));
+            let color = if i % 2 == 0 {
+                theme.accent_fg()
+            } else {
+                theme::mix(theme.accent_fg(), theme.pill_text, 0.25)
+            };
+            painter.rect_filled(bar_rect, bar_w * 0.5, color);
+        }
+        if playing {
+            ui.ctx().request_repaint_after(Duration::from_millis(33));
+        }
+
+        // Center: Song title between album art and waveform.
+        let text_left = art_rect.max.x + if compact { 6.0 } else { 8.0 };
+        let text_right = wave_left - if compact { 6.0 } else { 8.0 };
+        let avail_w = (text_right - text_left).max(0.0);
+        if avail_w > 16.0 {
+            let font = Theme::font_semibold(if compact {
+                SIZE_LABEL
+            } else {
+                SIZE_LABEL + 1.0
+            });
+            let mut job = egui::text::LayoutJob::single_section(
+                title.to_owned(),
+                egui::text::TextFormat::simple(font, theme.pill_text),
+            );
+            job.wrap = egui::text::TextWrapping {
+                max_width: avail_w,
+                max_rows: 1,
+                break_anywhere: true,
+                overflow_character: Some('…'),
+            };
+            let galley = painter.layout_job(job);
+            let gy = cy - galley.size().y * 0.5;
+            painter.galley(pos2(text_left, gy), galley, theme.pill_text);
+        }
+        return;
+    }
+
+    // 2. Mini-Notch mode (when a fullscreen or maximized app is open and no media is playing).
+    if rect.height() < 22.0 {
+        let has_activity = !badges.is_empty();
+        let pill_bar = Rect::from_center_size(pos2(rect.center().x, cy), vec2(18.0, 3.0));
+        painter.rect_filled(
+            pill_bar,
+            1.5,
+            theme::with_alpha(theme.pill_text_dim, 0.45),
+        );
+        if has_activity {
+            painter.circle_filled(pos2(rect.max.x - 8.0, cy), 2.5, theme.accent);
+        }
+        return;
+    }
+
+    const PAD: f32 = 15.0;
     let left = rect.min.x + PAD;
     let mut right = rect.max.x - PAD;
-    let now = ui.input(|i| i.time);
     let clock = system::clock();
 
     // Left: a running timer's ring + countdown, otherwise the clock.
@@ -804,9 +922,9 @@ fn draw_pill(badges: Vec<Badge>, battery: Option<Battery>, ui: &mut Ui, rect: Re
 
     // Right: live glyphs (coffee, phone pulse...), otherwise battery or date.
     let mut any_right = false;
-    for badge in &badges {
+        for badge in &badges {
         match badge {
-            Badge::Ring { .. } => {}
+            Badge::Ring { .. } | Badge::Media { .. } => {}
             Badge::Glyph { icon } => {
                 let ink = ink_text(
                     painter,
@@ -1090,7 +1208,8 @@ impl eframe::App for NookApp {
             self.material.translucent(),
             &self.cfg.look(),
         );
-        let hidden = self.cfg.hide_in_fullscreen && self.sys.fullscreen;
+        let hidden =
+            self.cfg.hide_in_fullscreen && !self.cfg.mini_in_fullscreen && self.sys.fullscreen;
 
         let mut clicked = None;
         let mut page_request = None;
@@ -1107,6 +1226,27 @@ impl eframe::App for NookApp {
             .visible()
             .filter_map(|m| m.collapsed_badge())
             .collect();
+        let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
+        let mini_mode = self.cfg.mini_in_fullscreen && self.sys.full_window;
+        if has_media {
+            if mini_mode {
+                self.shell.metrics.collapsed = vec2(174.0, 26.0);
+                self.shell.metrics.collapsed_radius = 13.0;
+                self.shell.metrics.top_margin = 4.0;
+            } else {
+                self.shell.metrics.collapsed = vec2(224.0, 34.0);
+                self.shell.metrics.collapsed_radius = 17.0;
+                self.shell.metrics.top_margin = 6.0;
+            }
+        } else if mini_mode {
+            self.shell.metrics.collapsed = vec2(58.0, 14.0);
+            self.shell.metrics.collapsed_radius = 7.0;
+            self.shell.metrics.top_margin = 4.0;
+        } else {
+            self.shell.metrics.collapsed = vec2(140.0, 34.0);
+            self.shell.metrics.collapsed_radius = 17.0;
+            self.shell.metrics.top_margin = 6.0;
+        }
         let battery = self.sys.battery;
         let composited = self.backdrop.is_some();
         // Stay open while typing in the panel or playing a plugin game (and

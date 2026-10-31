@@ -17,6 +17,8 @@ use std::time::Duration;
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SystemState {
     pub fullscreen: bool,
+    /// Foreground window on the notch's monitor is fullscreen or maximized.
+    pub full_window: bool,
     /// Another topmost window is above the notch (or it lost topmost).
     pub covered: bool,
     pub monitor: Option<Monitor>,
@@ -50,6 +52,7 @@ pub fn sample(own: Hwnd, mode_cursor: bool) -> SystemState {
     };
     SystemState {
         fullscreen: fullscreen::foreground_is_fullscreen(own),
+        full_window: fullscreen::foreground_is_full_window(own),
         covered: nook_platform::window::is_covered(own),
         monitor: monitor.ok(),
         light_theme: system::apps_use_light_theme(),
@@ -85,7 +88,7 @@ pub fn spawn(
                     }
                     ctx.request_repaint();
                 }
-                std::thread::sleep(Duration::from_millis(1000));
+                std::thread::sleep(Duration::from_millis(250));
             }
         })
 }

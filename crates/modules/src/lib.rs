@@ -52,6 +52,7 @@ pub const DEFAULT_ORDER: &[&str] = &[
     "system_monitor",
     "calendar",
     "quick_launch",
+    "quick_launch_2",
     "qr_code",
     "voice_memo",
     "plugins",
@@ -77,6 +78,7 @@ pub fn register_all(reg: &mut Registry) {
     reg.register(Box::<system_monitor::SystemMonitor>::default());
     reg.register(Box::<calendar::Calendar>::default());
     reg.register(Box::<quick_launch::QuickLaunch>::default());
+    reg.register(Box::new(quick_launch::QuickLaunch::second()));
     reg.register(Box::<qr_code::QrCodeModule>::default());
     reg.register(Box::<voice_memo::VoiceMemo>::default());
     // The plugin manager, then third-party tiles from the plugin folders.

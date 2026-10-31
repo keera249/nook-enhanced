@@ -273,13 +273,30 @@ impl Renderer<'_> {
                 })
             }
             Kind::Icon {
+                id,
                 icon,
                 size,
                 color: c,
                 fill,
             } => {
                 let s = size.unwrap_or(18.0);
-                let (rect, resp) = ui.allocate_exact_size(vec2(s, s), Sense::hover());
+                let sense = if id.is_some() {
+                    Sense::click()
+                } else {
+                    Sense::hover()
+                };
+                let (rect, resp) = ui.allocate_exact_size(vec2(s, s), sense);
+                if let Some(node_id) = id.as_deref() {
+                    if resp.hovered() {
+                        ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+                    }
+                    if resp.clicked() {
+                        self.emit(node_id, "click", Value::Null);
+                    }
+                    if resp.secondary_clicked() {
+                        self.emit(node_id, "right_click", Value::Null);
+                    }
+                }
                 paint::icon(
                     ui.painter(),
                     rect.center(),
@@ -291,6 +308,7 @@ impl Renderer<'_> {
                 resp
             }
             Kind::Image {
+                id,
                 path,
                 base64,
                 width,
@@ -298,6 +316,7 @@ impl Renderer<'_> {
                 rounding,
             } => self.image(
                 ui,
+                id.as_deref(),
                 path.as_deref(),
                 base64.as_deref(),
                 *width,
@@ -1110,6 +1129,7 @@ impl Renderer<'_> {
     fn image(
         &mut self,
         ui: &mut Ui,
+        id: Option<&str>,
         path: Option<&str>,
         b64: Option<&str>,
         width: Option<f32>,
@@ -1161,8 +1181,13 @@ impl Renderer<'_> {
             }
             self.state.images.insert(key.clone(), tex.ok());
         }
-        let tex = self.state.images.get(&key).and_then(Option::as_ref);
-        let natural = tex.map_or(vec2(32.0, 32.0), |t| t.size_vec2());
+        let tex_info = self
+            .state
+            .images
+            .get(&key)
+            .and_then(Option::as_ref)
+            .map(|t| (t.id(), t.size_vec2()));
+        let natural = tex_info.map_or(vec2(32.0, 32.0), |(_, s)| s);
         let aspect = natural.x / natural.y.max(1.0);
         let size = match (width, height) {
             (Some(w), Some(h)) => vec2(w, h),
@@ -1173,23 +1198,56 @@ impl Renderer<'_> {
                 vec2(w, w / aspect)
             }
         };
-        match tex {
-            Some(t) => ui.add(egui::Image::new((t.id(), size)).corner_radius(rounding)),
+        let sense = if id.is_some() {
+            Sense::click()
+        } else {
+            Sense::hover()
+        };
+        let (rect, resp) = ui.allocate_exact_size(size, sense);
+        let h = if let Some(node_id) = id {
+            let wid = self.id(node_id);
+            if resp.hovered() {
+                ui.ctx().set_cursor_icon(egui::CursorIcon::PointingHand);
+            }
+            if resp.clicked() {
+                self.emit(node_id, "click", Value::Null);
+            }
+            if resp.secondary_clicked() {
+                self.emit(node_id, "right_click", Value::Null);
+            }
+            nook_ui::anim::tween(ui.ctx(), wid.with("h"), resp.hovered(), 0.1)
+        } else {
+            0.0
+        };
+        if h > 0.0 {
+            ui.painter().rect_filled(
+                rect.expand(2.0),
+                rounding + 2.0,
+                with_alpha(kit::wash(self.theme), 2.0 * h),
+            );
+        }
+        let draw_rect = rect.expand(1.5 * h);
+        match tex_info {
+            Some((tex_id, _)) => {
+                ui.painter().add(
+                    egui::epaint::RectShape::filled(draw_rect, rounding, Color32::WHITE)
+                        .with_texture(tex_id, Rect::from_min_max(pos2(0.0, 0.0), pos2(1.0, 1.0))),
+                );
+            }
             None => {
-                let (rect, resp) = ui.allocate_exact_size(size, Sense::hover());
                 ui.painter()
-                    .rect_filled(rect, rounding, kit::wash(self.theme));
+                    .rect_filled(draw_rect, rounding, kit::wash(self.theme));
                 paint::icon(
                     ui.painter(),
-                    rect.center(),
+                    draw_rect.center(),
                     icons::glyph("image-broken"),
                     16.0,
                     self.theme.text_faint,
                     false,
                 );
-                resp
             }
         }
+        resp
     }
 }
 
