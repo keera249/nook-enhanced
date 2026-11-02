@@ -93,15 +93,13 @@ pub fn foreground_is_full_window(own: Hwnd) -> bool {
         ) {
             return false;
         }
-        let (Ok(mon), Ok(ours)) = (
-            monitor::of_window(Hwnd::from_raw(fg.0 as isize)),
-            monitor::of_window(own),
-        ) else {
+        let mon = monitor::of_window(Hwnd::from_raw(fg.0 as isize))
+            .or_else(|_| monitor::of_window(own))
+            .or_else(|_| monitor::primary())
+            .ok();
+        let Some(mon) = mon else {
             return false;
         };
-        if mon.bounds != ours.bounds {
-            return false;
-        }
         if IsZoomed(fg).as_bool() {
             return true;
         }
@@ -109,6 +107,12 @@ pub fn foreground_is_full_window(own: Hwnd) -> bool {
         if GetWindowRect(fg, &mut r).is_err() {
             return false;
         }
-        Rect::from(r).covers(&mon.work)
+        let w_width = (r.right - r.left).max(0);
+        let w_height = (r.bottom - r.top).max(0);
+        let mon_w = (mon.work.right - mon.work.left).max(1);
+        let mon_h = (mon.work.bottom - mon.work.top).max(1);
+        let covers_most = w_width >= (mon_w - 30) && w_height >= (mon_h - 30) && r.top <= mon.work.top + 30;
+
+        Rect::from(r).covers(&mon.work) || covers_most
     }
 }

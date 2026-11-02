@@ -142,7 +142,7 @@ pub struct Shell {
     tall: f32,
     id: Id,
     outline: Vec<Pos2>,
-    last_shape: Option<Squircle>,
+    pub last_shape: Option<Squircle>,
     reveal_start: Option<f64>,
 }
 

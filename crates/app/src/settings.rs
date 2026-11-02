@@ -268,14 +268,20 @@ pub fn page(
                 )
             }) {
                 cfg.mini_in_fullscreen = mini;
+                if mini {
+                    cfg.hide_in_fullscreen = false;
+                }
                 out.changed = true;
             }
             let mut hide = cfg.hide_in_fullscreen;
-            if row(&mut lui, "Hide in fullscreen", theme, |ui| {
+            if row(&mut lui, "Hide in full window", theme, |ui| {
                 widgets::toggle(ui, &mut hide, theme)
-                    .on_hover_text("Fade the notch out while a game or video is fullscreen")
+                    .on_hover_text("Fade the notch out when an app or browser is fullscreen or maximized")
             }) {
                 cfg.hide_in_fullscreen = hide;
+                if hide {
+                    cfg.mini_in_fullscreen = false;
+                }
                 out.changed = true;
             }
 

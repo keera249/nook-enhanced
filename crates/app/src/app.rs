@@ -1208,8 +1208,25 @@ impl eframe::App for NookApp {
             self.material.translucent(),
             &self.cfg.look(),
         );
-        let hidden =
-            self.cfg.hide_in_fullscreen && !self.cfg.mini_in_fullscreen && self.sys.fullscreen;
+        let window = ctx.content_rect();
+        let hovered_notch = ctx.input(|i| {
+            if let Some(p) = i.pointer.hover_pos() {
+                if p.y <= 6.0 {
+                    let cx = window.center().x;
+                    let half_w = ((if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }) as f32 * 0.7).max(80.0);
+                    (p.x - cx).abs() <= half_w
+                } else if let Some(s) = self.shell.last_shape {
+                    s.contains(p)
+                } else {
+                    false
+                }
+            } else {
+                false
+            }
+        });
+        let full = self.sys.full_window || self.sys.fullscreen;
+        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || hovered_notch;
+        let hidden = self.cfg.hide_in_fullscreen && full && !is_interacting;
 
         let mut clicked = None;
         let mut page_request = None;
@@ -1227,7 +1244,7 @@ impl eframe::App for NookApp {
             .filter_map(|m| m.collapsed_badge())
             .collect();
         let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
-        let mini_mode = self.cfg.mini_in_fullscreen && self.sys.full_window;
+        let mini_mode = !self.cfg.hide_in_fullscreen && self.cfg.mini_in_fullscreen && full;
         let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
         if has_media {
             if mini_mode {
