@@ -1,0 +1,9 @@
+id          = "prayer-times"
+name        = "Prayer Times"
+icon        = "moon-stars"
+size        = "small"
+run         = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "prayer.ps1"]
+page_size   = [580, 430]
+description = "Islamic prayer times & Azan countdown timer with dynamic notch ring and auto location detection."
+author      = "you"
+version     = "1.0.0"

@@ -54,6 +54,12 @@ $script:ClaudeModelLabels = @('Claude Sonnet', 'Claude Opus')
 $script:SpeechModels = @('auto', 'nvidia-ar', 'cohere-ar', 'nvidia-en')
 $script:SpeechModelLabels = @('Auto', 'Nvidia AR', 'Cohere AR', 'Nvidia EN')
 
+function Get-IndexValue($v) {
+    if ($null -eq $v) { return 0 }
+    if ($null -ne $v.index) { return [int]$v.index }
+    try { return [int]$v } catch { return 0 }
+}
+
 function Send-Message([hashtable]$Obj) {
     $json = $Obj | ConvertTo-Json -Depth 25 -Compress
     [Console]::Out.WriteLine($json)
@@ -1054,7 +1060,7 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 }
                 Update-AllViews
             } elseif ($id -eq 'nav_tab') {
-                $script:CurrentTab = [int]$val
+                $script:CurrentTab = Get-IndexValue $val
                 $script:StatusMsg = ''
                 Update-AllViews
             } elseif ($id -eq 'btn_open_dawwar' -or $id -eq 'act_open_native') {
@@ -1069,14 +1075,14 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 $script:StatusColor = 'green'
                 Update-AllViews
             } elseif ($id -eq 'chip_theme') {
-                $idx = [int]$val
+                $idx = Get-IndexValue $val
                 if ($idx -ge 0 -and $idx -lt $script:Themes.Count) {
                     $settings['Theme'] = $script:Themes[$idx]
                     Save-DawwarSettings $settings $true
                     Update-AllViews
                 }
             } elseif ($id -eq 'chip_accent') {
-                $idx = [int]$val
+                $idx = Get-IndexValue $val
                 if ($idx -ge 0 -and $idx -lt $script:Accents.Count) {
                     $settings['Accent'] = $script:Accents[$idx]
                     Save-DawwarSettings $settings $true
@@ -1103,28 +1109,28 @@ while ($null -ne ($line = [Console]::In.ReadLine())) {
                 Save-DawwarSettings $settings $true
                 Update-AllViews
             } elseif ($id -eq 'chip_ai_provider') {
-                $idx = [int]$val
+                $idx = Get-IndexValue $val
                 if ($idx -ge 0 -and $idx -lt $script:AiProviders.Count) {
                     $settings['AiProvider'] = $script:AiProviders[$idx]
                     Save-DawwarSettings $settings $true
                     Update-AllViews
                 }
             } elseif ($id -eq 'chip_or_model') {
-                $idx = [int]$val
+                $idx = Get-IndexValue $val
                 if ($idx -ge 0 -and $idx -lt $script:OpenRouterModels.Count) {
                     $settings['AiModel'] = $script:OpenRouterModels[$idx]
                     Save-DawwarSettings $settings $true
                     Update-AllViews
                 }
             } elseif ($id -eq 'chip_claude_model') {
-                $idx = [int]$val
+                $idx = Get-IndexValue $val
                 if ($idx -ge 0 -and $idx -lt $script:ClaudeModels.Count) {
                     $settings['AiClaudeModel'] = $script:ClaudeModels[$idx]
                     Save-DawwarSettings $settings $true
                     Update-AllViews
                 }
             } elseif ($id -eq 'chip_speech_model') {
-                $idx = [int]$val
+                $idx = Get-IndexValue $val
                 if ($idx -ge 0 -and $idx -lt $script:SpeechModels.Count) {
                     $settings['SpeechModel'] = $script:SpeechModels[$idx]
                     Save-DawwarSettings $settings $true
