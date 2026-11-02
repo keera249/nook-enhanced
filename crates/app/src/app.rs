@@ -1228,13 +1228,15 @@ impl eframe::App for NookApp {
             .collect();
         let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
         let mini_mode = self.cfg.mini_in_fullscreen && self.sys.full_window;
+        let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
         if has_media {
             if mini_mode {
                 self.shell.metrics.collapsed = vec2(174.0, 26.0);
                 self.shell.metrics.collapsed_radius = 13.0;
                 self.shell.metrics.top_margin = 4.0;
             } else {
-                self.shell.metrics.collapsed = vec2(224.0, 34.0);
+                let media_w = (base_w + 64.0).max(224.0);
+                self.shell.metrics.collapsed = vec2(media_w, 34.0);
                 self.shell.metrics.collapsed_radius = 17.0;
                 self.shell.metrics.top_margin = 6.0;
             }
@@ -1243,7 +1245,7 @@ impl eframe::App for NookApp {
             self.shell.metrics.collapsed_radius = 7.0;
             self.shell.metrics.top_margin = 4.0;
         } else {
-            self.shell.metrics.collapsed = vec2(140.0, 34.0);
+            self.shell.metrics.collapsed = vec2(base_w, 34.0);
             self.shell.metrics.collapsed_radius = 17.0;
             self.shell.metrics.top_margin = 6.0;
         }

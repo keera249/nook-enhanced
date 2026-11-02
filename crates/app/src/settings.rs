@@ -19,8 +19,10 @@ pub const SETTINGS_ID: &str = "settings";
 const GAP: f32 = 8.0;
 const HEADER: f32 = 28.0;
 const ROW: f32 = 28.0;
-/// Height of the Appearance and Behavior cards (title + five rows).
-const TOP_CARD: f32 = 182.0;
+/// Height of the Appearance and Behavior cards (title + six rows).
+const TOP_CARD: f32 = 210.0;
+const WIDTH_MIN: u32 = 140;
+const WIDTH_MAX: u32 = 280;
 /// Height of a collapsible card's clickable header.
 const DISCLOSURE: f32 = 44.0;
 /// Revealed height of each collapsible section's body.
@@ -246,6 +248,17 @@ pub fn page(
                 widgets::segmented(ui, &["Left", "Center", "Right"], &mut pos_idx, theme)
             }) {
                 cfg.placement = Placement::ALL[pos_idx];
+                out.changed = true;
+            }
+            let width_span = (WIDTH_MAX - WIDTH_MIN) as f32;
+            let current_w = (if cfg.notch_width == 0 { 180 } else { cfg.notch_width }).clamp(WIDTH_MIN, WIDTH_MAX);
+            let mut width_t = (current_w - WIDTH_MIN) as f32 / width_span;
+            if row(&mut lui, "Notch width", theme, |ui| {
+                let resp = widgets::slider(ui, &mut width_t, 110.0, 14, theme);
+                value_label(ui, &format!("{}px", current_w), theme);
+                resp
+            }) {
+                cfg.notch_width = WIDTH_MIN + (width_t * width_span).round() as u32;
                 out.changed = true;
             }
             let mut mini = cfg.mini_in_fullscreen;

@@ -1,0 +1,10 @@
+id            = "dawwar"
+name          = "Dawwar"
+icon          = "aperture"
+size          = "wide"
+run           = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "dawwar.ps1"]
+accepts_files = true
+page_size     = [596, 360]
+description   = "Dawwar radial file converter & AI wheel in the background with full in-notch settings and quick file drop conversion."
+author        = "you"
+version       = "1.0.0"

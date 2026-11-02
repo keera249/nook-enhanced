@@ -109,6 +109,9 @@ pub struct Config {
     /// window is fullscreen or maximized, returning to normal size on the
     /// desktop or when a window is only partially open.
     pub mini_in_fullscreen: bool,
+    /// Width of the collapsed notch pill in pixels (140..280, default 180).
+    #[serde(default = "default_notch_width")]
+    pub notch_width: u32,
     pub hover_delay_ms: u32,
     pub collapse_grace_ms: u32,
     pub launch_at_startup: bool,
@@ -143,6 +146,7 @@ impl Default for Config {
             on_top: true,
             hide_in_fullscreen: false,
             mini_in_fullscreen: true,
+            notch_width: 180,
             hover_delay_ms: 120,
             collapse_grace_ms: 250,
             launch_at_startup: false,
@@ -162,6 +166,10 @@ impl Default for Config {
             },
         }
     }
+}
+
+fn default_notch_width() -> u32 {
+    180
 }
 
 pub const DEFAULT_GLASS_OPACITY: u8 = 70;
