@@ -41,7 +41,7 @@ enum Page {
 }
 
 /// Shell outline (window px) and debug-overlay rect last sent to the OS.
-type PushedShape = (Vec<(f32, f32)>, Option<Rect>);
+type PushedShape = (Vec<(f32, f32)>, Option<Rect>, bool);
 
 struct Hotkeys {
     manager: GlobalHotKeyManager,
@@ -537,18 +537,28 @@ impl NookApp {
     /// Pushes the shell's current shape to the compositor (sub-pixel clip
     /// of the glass) and to the hit tester (screen pixels, plus the debug
     /// overlay if enabled). Only does work when the shape changed.
-    fn update_shape(&mut self, ctx: &egui::Context, shape: Option<Squircle>, extra: Option<Rect>) {
+    fn update_shape(
+        &mut self,
+        ctx: &egui::Context,
+        shape: Option<Squircle>,
+        visible: bool,
+        extra: Option<Rect>,
+    ) {
         let ppp = ctx.pixels_per_point();
         let outline: Vec<(f32, f32)> = shape
             .map(|s| s.outline().iter().map(|p| (p.x * ppp, p.y * ppp)).collect())
             .unwrap_or_default();
-        let key = (outline, extra);
+        let key = (
+            if visible { outline.clone() } else { Vec::new() },
+            extra,
+            visible,
+        );
         if self.pushed.as_ref() == Some(&key) && !self.shape_dirty {
             return;
         }
-        let (outline, extra) = key;
+        let (backdrop_outline, extra, _) = key;
         if let Some(b) = &mut self.backdrop
-            && let Err(e) = b.set_shape(&outline)
+            && let Err(e) = b.set_shape(&backdrop_outline)
         {
             tracing::warn!("backdrop clip: {e}");
         }
@@ -557,11 +567,11 @@ impl NookApp {
                 .anchor
                 .map(|(x, y, _, _)| (x as f32, y as f32))
                 .unwrap_or_default();
-            let mut polygons = Vec::with_capacity(2);
+            let mut polygons = Vec::with_capacity(3);
             if let Some(s) = shape {
                 // A point of slack so the anti-aliased edge still counts.
                 let padded =
-                    Squircle::new(s.rect.expand(1.0), s.radius + 1.0).with_exponent(s.exponent);
+                    Squircle::new(s.rect.expand(2.0), s.radius + 2.0).with_exponent(s.exponent);
                 polygons.push(
                     padded
                         .outline()
@@ -569,6 +579,12 @@ impl NookApp {
                         .map(|p| (ox + p.x * ppp, oy + p.y * ppp))
                         .collect(),
                 );
+                // Also bridge to top of monitor so slamming cursor to top edge over notch triggers hit
+                let bx0 = ox + (s.rect.min.x - 4.0) * ppp;
+                let bx1 = ox + (s.rect.max.x + 4.0) * ppp;
+                let by0 = oy;
+                let by1 = oy + (s.rect.min.y + 4.0) * ppp;
+                polygons.push(vec![(bx0, by0), (bx1, by0), (bx1, by1), (bx0, by1)]);
             }
             if let Some(r) = extra {
                 let (x0, y0) = (ox + r.min.x * ppp, oy + r.min.y * ppp);
@@ -577,7 +593,11 @@ impl NookApp {
             }
             hit.set_shape(HitShape { polygons });
         }
-        self.pushed = Some((outline, extra));
+        self.pushed = Some((
+            if visible { outline } else { Vec::new() },
+            extra,
+            visible,
+        ));
         self.shape_dirty = false;
     }
 
@@ -1209,23 +1229,25 @@ impl eframe::App for NookApp {
             &self.cfg.look(),
         );
         let window = ctx.content_rect();
+        let hit_inside = self.hit.as_ref().is_some_and(HitTester::inside);
         let hovered_notch = ctx.input(|i| {
             if let Some(p) = i.pointer.hover_pos() {
-                if p.y <= 6.0 {
+                if let Some(s) = self.shell.last_shape {
+                    s.contains(p)
+                        || (p.y <= s.rect.max.y
+                            && (p.x - s.rect.center().x).abs() <= s.rect.width() * 0.5 + 4.0)
+                } else {
                     let cx = window.center().x;
                     let half_w = ((if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }) as f32 * 0.7).max(80.0);
-                    (p.x - cx).abs() <= half_w
-                } else if let Some(s) = self.shell.last_shape {
-                    s.contains(p)
-                } else {
-                    false
+                    p.y <= 40.0 && (p.x - cx).abs() <= half_w
                 }
             } else {
                 false
             }
         });
+        let is_hovered = hit_inside || hovered_notch;
         let full = self.sys.full_window || self.sys.fullscreen;
-        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || hovered_notch;
+        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || is_hovered;
         let hidden = self.cfg.hide_in_fullscreen && full && !is_interacting;
 
         let mut clicked = None;
@@ -1415,7 +1437,7 @@ impl eframe::App for NookApp {
         let overlay_rect: Option<Rect> = None;
 
         self.update_tint(&ctx, &theme, &out);
-        self.update_shape(&ctx, out.visible.then_some(out.shape), overlay_rect);
+        self.update_shape(&ctx, Some(out.shape), out.visible, overlay_rect);
 
         // Reveal the window once real frames have been presented.
         self.frames = self.frames.saturating_add(1);

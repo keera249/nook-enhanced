@@ -219,12 +219,15 @@ impl Shell {
         let now = ctx.input(|i| i.time);
         let m = self.metrics;
 
-        let hovered = !hidden
-            && (self.hold_open
-                || match (self.last_shape, ctx.input(|i| i.pointer.hover_pos())) {
-                    (Some(s), Some(p)) => s.contains(p),
-                    _ => false,
-                });
+        let cursor_in_notch = match (self.last_shape, ctx.input(|i| i.pointer.hover_pos())) {
+            (Some(s), Some(p)) => {
+                s.contains(p)
+                    || (p.y <= s.rect.max.y
+                        && (p.x - s.rect.center().x).abs() <= s.rect.width() * 0.5 + 4.0)
+            }
+            _ => false,
+        };
+        let hovered = !hidden && (self.hold_open || cursor_in_notch);
 
         // Click on the glass (not on a tile) pins / unpins.
         if let Some(shape) = self.last_shape
