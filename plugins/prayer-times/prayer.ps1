@@ -1,5 +1,5 @@
-# Nook Prayer Times & Azan Countdown Plugin
-# Provides dynamic island notch countdown ring, Bento tile, and full in-notch settings.
+# Nook Prayer Times, Azan Countdown and Athkar Plugin
+# Dynamic island notch countdown ring, Bento tile, and full in-notch settings with scheduled Athkar.
 
 [Console]::InputEncoding  = [System.Text.Encoding]::UTF8
 [Console]::OutputEncoding = [System.Text.Encoding]::UTF8
@@ -19,6 +19,15 @@ if (Test-Path -LiteralPath $script:IconPath) {
     try {
         $bytes = [System.IO.File]::ReadAllBytes($script:IconPath)
         $script:PrayerIconBase64 = [Convert]::ToBase64String($bytes)
+    } catch {}
+}
+
+# Load Athkar Database from athkar.json
+$script:AthkarFile = Join-Path $PSScriptRoot 'athkar.json'
+$script:AthkarList = @()
+if (Test-Path -LiteralPath $script:AthkarFile) {
+    try {
+        $script:AthkarList = Get-Content -LiteralPath $script:AthkarFile -Raw -Encoding UTF8 | ConvertFrom-Json
     } catch {}
 }
 
@@ -81,6 +90,12 @@ $script:ThresholdValues  = @(30, 15, 45, 60, 0)
 $script:MethodLabels = @('Umm Al-Qura (Makkah)', 'Egyptian Authority', 'Muslim World League', 'ISNA (North America)', 'Karachi')
 $script:MethodIds    = @(4, 5, 3, 2, 1)
 
+$script:AthkarIntervalOptions = @('10 min', '15 min', '20 min', '30 min (Default)', '45 min', '1 Hour', '2 Hours', '3 Hours')
+$script:AthkarIntervalValues  = @(10, 15, 20, 30, 45, 60, 120, 180)
+
+$script:AthkarLangOptions = @('Bilingual (Dhikr + Meaning)', 'Arabic Short', 'English / Transliteration')
+$script:AthkarLangValues  = @(1, 0, 2)
+
 function Load-Settings {
     $defaults = [ordered]@{
         ShowBeforeMinutes = 30
@@ -91,6 +106,11 @@ function Load-Settings {
         AzanAudio         = $true
         DesktopNotify     = $true
         LanguageMode      = 0
+        AthkarEnabled     = $true
+        AthkarIntervalMin = 30
+        AthkarLanguage    = 1
+        AthkarAudio       = $true
+        AthkarToast       = $true
     }
     if (Test-Path -LiteralPath $script:SettingsFile) {
         try {
@@ -220,7 +240,6 @@ function Calculate-OfflineTimes([double]$lat, [double]$lon, [double]$tzOffset, [
     $sunHA  = & $getHA 0.833
     $magHA  = $sunHA
 
-    # Asr altitude
     $asrAngle = [Math]::Atan(1.0 / (1.0 + [Math]::Tan([Math]::Abs($lat - $dec) * $deg2rad))) * $rad2deg
     $cosAsrH = ([Math]::Sin($asrAngle * $deg2rad) - [Math]::Sin($lat * $deg2rad) * [Math]::Sin($dec * $deg2rad)) /
                ([Math]::Cos($lat * $deg2rad) * [Math]::Cos($dec * $deg2rad))
@@ -312,7 +331,7 @@ function Get-DailyTimings($loc, [int]$method, [datetime]$targetDate) {
     return $timings
 }
 
-# Notification sound & alert
+# Azan Alert
 $script:LastAlertPrayer = ''
 
 function Trigger-AzanAlert($prayerName) {
@@ -321,7 +340,7 @@ function Trigger-AzanAlert($prayerName) {
 
     $settings = Load-Settings
 
-    # Expand the notch down (Show) into full Dynamic Island announcement
+    # Expand the notch down into full Dynamic Island announcement
     Send-Msg @{ type = 'show' }
 
     if ($settings.DesktopNotify) {
@@ -360,7 +379,63 @@ function Trigger-AzanAlert($prayerName) {
     }
 }
 
-# State variables
+# Athkar State & Trigger
+$script:LastAthkarTime   = [DateTime]::Now
+$script:ActiveAthkar      = $null
+$script:ActiveAthkarEnd   = [DateTime]::MinValue
+$script:CurrentAthkarIdx  = 0
+$script:TasbeehCounts     = @{}
+
+function Trigger-AthkarAlert([int]$forceIdx = -1) {
+    if ($script:AthkarList.Count -eq 0) { return }
+    $settings = Load-Settings
+    if (-not $settings.AthkarEnabled -and $forceIdx -lt 0) { return }
+
+    if ($forceIdx -ge 0 -and $forceIdx -lt $script:AthkarList.Count) {
+        $script:CurrentAthkarIdx = $forceIdx
+    } else {
+        $script:CurrentAthkarIdx = ($script:CurrentAthkarIdx + 1) % $script:AthkarList.Count
+    }
+
+    $athkar = $script:AthkarList[$script:CurrentAthkarIdx]
+    $script:ActiveAthkar = $athkar
+    $script:ActiveAthkarEnd = [DateTime]::Now.AddSeconds(15)
+
+    if ($settings.AthkarToast) {
+        try {
+            [Windows.UI.Notifications.ToastNotificationManager, Windows.UI.Notifications, ContentType = WindowsRuntime] | Out-Null
+            $template = [Windows.UI.Notifications.ToastNotificationManager]::GetTemplateContent([Windows.UI.Notifications.ToastTemplateType]::ToastText02)
+            $textNodes = $template.GetElementsByTagName('text')
+            $textNodes.Item(0).AppendChild($template.CreateTextNode("Athkar Reminder - Daily Remembrance")) | Out-Null
+            $textNodes.Item(1).AppendChild($template.CreateTextNode("$($athkar.arabic)`n$($athkar.meaning)")) | Out-Null
+            $toast = [Windows.UI.Notifications.ToastNotification]::new($template)
+            [Windows.UI.Notifications.ToastNotificationManager]::CreateToastNotifier('Nook.PrayerTimes').Show($toast)
+        } catch {
+            Send-Msg @{
+                type  = 'notify'
+                title = "Athkar Reminder"
+                body  = "$($athkar.arabic)`n$($athkar.meaning)"
+            }
+        }
+    }
+
+    if ($settings.AthkarAudio) {
+        try {
+            $wavCandidates = @(
+                'C:\Windows\Media\Windows Notify System Generic.wav',
+                'C:\Windows\Media\notify.wav',
+                'C:\Windows\Media\chimes.wav'
+            )
+            $wav = $wavCandidates | Where-Object { Test-Path -LiteralPath $_ } | Select-Object -First 1
+            if ($wav) {
+                $player = New-Object System.Media.SoundPlayer $wav
+                $player.Play()
+            }
+        } catch {}
+    }
+}
+
+# General UI State
 $script:CurrentTab = 0
 $script:TileSize   = 'wide'
 $script:BadgeActive = $false
@@ -480,7 +555,6 @@ function Build-TileView {
         }
     }
 
-    # Wide Tile View: Custom luxury emblem on the left, details & countdown in center, mini prayer pills on right
     $prayerPills = @()
     foreach ($p in $state.Prayers) {
         $isNext = ($p.Name -eq $next.Name)
@@ -541,7 +615,7 @@ function Build-TileView {
     }
 }
 
-# Build Page View (Interactive Settings & Schedule)
+# Build Page View (Interactive Settings, Athkar and Schedule)
 function Build-PageView {
     $state = Get-PrayerScheduleState
     $settings = $state.Settings
@@ -605,7 +679,7 @@ function Build-PageView {
             @{
                 type = 'chips'
                 id = 'nav_tab'
-                options = @("Today's Timetable", 'Notch & Alert Settings')
+                options = @("Today's Timetable", "Athkar & Tasbeeh", "Settings & Alerts")
                 selected = [int]$script:CurrentTab
             }
         )
@@ -648,12 +722,135 @@ function Build-PageView {
             gap = 6
             children = $scheduleRows
         }
-    } else {
+    }
+    elseif ($script:CurrentTab -eq 1) {
+        $curr = if ($script:AthkarList.Count -gt 0) {
+            $script:AthkarList[$script:CurrentAthkarIdx % $script:AthkarList.Count]
+        } else { $null }
+
+        $aid = if ($curr) { [string]$curr.id } else { 'default' }
+        $count = if ($script:TasbeehCounts.ContainsKey($aid)) { [int]$script:TasbeehCounts[$aid] } else { 0 }
+        $target = if ($curr -and $curr.target) { [int]$curr.target } else { 33 }
+
+        if ($curr) {
+            $tabContent += @{
+                type = 'card'
+                padding = 12
+                gap = 8
+                children = @(
+                    @{
+                        type = 'row'
+                        align = 'center'
+                        children = @(
+                            @{ type = 'text'; text = 'Active Remembrance (Dhikr)'; size = 'small'; bold = $true; color = 'accent' },
+                            @{ type = 'spacer' },
+                            @{ type = 'text'; text = "$($script:CurrentAthkarIdx + 1) / $($script:AthkarList.Count)"; size = 'small'; color = 'dim' }
+                        )
+                    },
+                    @{
+                        type = 'card'
+                        padding = 10
+                        gap = 6
+                        children = @(
+                            @{ type = 'text'; text = $curr.arabic; size = 'title'; bold = $true; color = 'accent' },
+                            @{ type = 'text'; text = "$($curr.translit) - $($curr.meaning)"; size = 'small'; color = 'primary' },
+                            @{ type = 'text'; text = "Virtue: $($curr.virtue)"; size = 'small'; color = 'dim' }
+                        )
+                    },
+                    @{
+                        type = 'row'
+                        align = 'center'
+                        gap = 8
+                        children = @(
+                            @{
+                                type = 'button'
+                                id = 'btn_tasbeeh_count'
+                                label = "Recite & Count: $count / $target"
+                                icon = 'fingerprint'
+                            },
+                            @{
+                                type = 'button'
+                                id = 'btn_tasbeeh_reset'
+                                icon = 'arrow-counter-clockwise'
+                                tooltip = 'Reset counter'
+                            },
+                            @{ type = 'spacer' },
+                            @{
+                                type = 'button'
+                                id = 'btn_athkar_prev'
+                                icon = 'caret-left'
+                                tooltip = 'Previous'
+                            },
+                            @{
+                                type = 'button'
+                                id = 'btn_athkar_next'
+                                icon = 'caret-right'
+                                tooltip = 'Next'
+                            },
+                            @{
+                                type = 'button'
+                                id = 'btn_send_notch'
+                                label = 'Show on Notch'
+                                icon = 'sparkle'
+                            }
+                        )
+                    }
+                )
+            }
+        }
+
+        # List of all Adhkar
+        $athkarRows = @()
+        for ($i = 0; $i -lt $script:AthkarList.Count; $i++) {
+            $item = $script:AthkarList[$i]
+            $isSelected = ($i -eq $script:CurrentAthkarIdx)
+            $athkarRows += @{
+                type = 'row'
+                align = 'center'
+                gap = 8
+                children = @(
+                    @{
+                        type = 'column'
+                        gap = 1
+                        children = @(
+                            @{ type = 'text'; text = $item.short_ar; size = 'body'; bold = $isSelected; color = if ($isSelected) { 'accent' } else { 'primary' } },
+                            @{ type = 'text'; text = $item.translit; size = 'small'; color = 'dim' }
+                        )
+                    },
+                    @{ type = 'spacer' },
+                    @{
+                        type = 'button'
+                        id = "select_athkar_$i"
+                        label = if ($isSelected) { 'Selected' } else { 'Select' }
+                        icon = if ($isSelected) { 'check' } else { 'book-open' }
+                    }
+                )
+            }
+            $athkarRows += @{ type = 'divider' }
+        }
+        if ($athkarRows.Count -gt 0) {
+            $athkarRows = $athkarRows[0..($athkarRows.Count - 2)]
+        }
+
+        $tabContent += @{
+            type = 'card'
+            padding = 10
+            gap = 6
+            children = $athkarRows
+        }
+    }
+    else {
         $threshIdx = [array]::IndexOf($script:ThresholdValues, [int]$settings.ShowBeforeMinutes)
-        if ($threshIdx -lt 0) { $threshIdx = 0 } # 30 min default
+        if ($threshIdx -lt 0) { $threshIdx = 0 }
 
         $methodIdx = [array]::IndexOf($script:MethodIds, [int]$settings.CalcMethod)
-        if ($methodIdx -lt 0) { $methodIdx = 0 } # Umm Al-Qura default
+        if ($methodIdx -lt 0) { $methodIdx = 0 }
+
+        $athkarIntIdx = [array]::IndexOf($script:AthkarIntervalValues, [int]$settings.AthkarIntervalMin)
+        if ($athkarIntIdx -lt 0) { $athkarIntIdx = 3 }
+
+        $athkarLangIdx = [array]::IndexOf($script:AthkarLangValues, [int]$settings.AthkarLanguage)
+        if ($athkarLangIdx -lt 0) { $athkarLangIdx = 0 }
 
         # Card 1: Notch Ring Timing Setting
         $tabContent += @{
@@ -679,7 +876,122 @@ function Build-PageView {
             )
         }
 
-        # Card 2: Location & Calculation Method
+        # Card 2: Athkar Notifications in Outer Notch
+        $tabContent += @{
+            type = 'card'
+            padding = 10
+            gap = 8
+            children = @(
+                @{ type = 'text'; text = 'Athkar Remembrances in Outer Notch'; size = 'small'; bold = $true; color = 'accent' },
+                @{
+                    type = 'row'
+                    align = 'center'
+                    children = @(
+                        @{
+                            type = 'column'
+                            gap = 1
+                            children = @(
+                                @{ type = 'text'; text = 'Enable Periodic Athkar in Notch'; size = 'body' },
+                                @{ type = 'text'; text = 'Displays authentic Islamic remembrances in the outer notch at chosen intervals'; size = 'small'; color = 'dim' }
+                            )
+                        },
+                        @{ type = 'spacer' },
+                        @{
+                            type = 'toggle'
+                            id = 'toggle_athkar_enabled'
+                            value = [bool]$settings.AthkarEnabled
+                        }
+                    )
+                },
+                @{ type = 'divider' },
+                @{
+                    type = 'column'
+                    gap = 4
+                    children = @(
+                        @{ type = 'text'; text = 'Remembrance Interval (Every how many minutes):'; size = 'body' },
+                        @{
+                            type = 'chips'
+                            id = 'chip_athkar_interval'
+                            options = $script:AthkarIntervalOptions
+                            selected = [int]$athkarIntIdx
+                        }
+                    )
+                },
+                @{ type = 'divider' },
+                @{
+                    type = 'column'
+                    gap = 4
+                    children = @(
+                        @{ type = 'text'; text = 'Notch Outer Display Style:'; size = 'body' },
+                        @{
+                            type = 'chips'
+                            id = 'chip_athkar_lang'
+                            options = $script:AthkarLangOptions
+                            selected = [int]$athkarLangIdx
+                        }
+                    )
+                },
+                @{ type = 'divider' },
+                @{
+                    type = 'row'
+                    align = 'center'
+                    children = @(
+                        @{
+                            type = 'column'
+                            gap = 1
+                            children = @(
+                                @{ type = 'text'; text = 'Desktop Notification Popup'; size = 'body' },
+                                @{ type = 'text'; text = 'Shows a Windows notification popup with virtue and meaning'; size = 'small'; color = 'dim' }
+                            )
+                        },
+                        @{ type = 'spacer' },
+                        @{
+                            type = 'toggle'
+                            id = 'toggle_athkar_toast'
+                            value = [bool]$settings.AthkarToast
+                        }
+                    )
+                },
+                @{ type = 'divider' },
+                @{
+                    type = 'row'
+                    align = 'center'
+                    children = @(
+                        @{
+                            type = 'column'
+                            gap = 1
+                            children = @(
+                                @{ type = 'text'; text = 'Play Gentle Chime on Arrival'; size = 'body' },
+                                @{ type = 'text'; text = 'Plays a quiet, soothing chime when a remembrance arrives'; size = 'small'; color = 'dim' }
+                            )
+                        },
+                        @{ type = 'spacer' },
+                        @{
+                            type = 'toggle'
+                            id = 'toggle_athkar_audio'
+                            value = [bool]$settings.AthkarAudio
+                        }
+                    )
+                },
+                @{ type = 'divider' },
+                @{
+                    type = 'row'
+                    align = 'center'
+                    children = @(
+                        @{ type = 'text'; text = 'Test Athkar Notification:'; size = 'body' },
+                        @{ type = 'spacer' },
+                        @{
+                            type = 'button'
+                            id = 'btn_test_athkar'
+                            label = 'Test on Notch Now'
+                            icon = 'sparkle'
+                        }
+                    )
+                }
+            )
+        }
+
+        # Card 3: Location & Calculation Method
         $tabContent += @{
             type = 'card'
             padding = 10
@@ -723,7 +1035,7 @@ function Build-PageView {
             )
         }
 
-        # Card 3: Azan Sound & Notifications
+        # Card 4: Azan Sound & Notifications
         $tabContent += @{
             type = 'card'
             padding = 10
@@ -801,8 +1113,36 @@ function Build-PageView {
 }
 
 function Update-NotchBadge {
+    $now = Get-Date
+    $settings = Load-Settings
+
+    # 1. Athkar Notification Override on Outer Notch
+    if ($script:ActiveAthkar -and $now -lt $script:ActiveAthkarEnd) {
+        $remSec = ($script:ActiveAthkarEnd - $now).TotalSeconds
+        $prog = [Math]::Max(0.0, [Math]::Min(1.0, $remSec / 15.0))
+        $lang = [int]$settings.AthkarLanguage
+        $lbl = switch ($lang) {
+            0 { "$($script:ActiveAthkar.short_ar)" }
+            2 { "Dhikr: $($script:ActiveAthkar.translit)" }
+            default { "Dhikr: $($script:ActiveAthkar.short_ar)" }
+        }
+
+        Send-Msg @{
+            type = 'badge'
+            badge = @{
+                kind = 'ring'
+                progress = [float]$prog
+                label = $lbl
+            }
+        }
+        $script:BadgeActive = $true
+        return
+    } else {
+        $script:ActiveAthkar = $null
+    }
+
+    # 2. Regular Prayer Times Countdown Ring
     $state = Get-PrayerScheduleState
-    $settings = $state.Settings
     $diffSec = $state.DiffSec
     $next = $state.Next
 
@@ -811,9 +1151,6 @@ function Update-NotchBadge {
 
     if ($threshMin -lt 0) { $threshMin = 30 }
 
-    # When should it appear on the outer notch?
-    # 1. threshMin == 0 (Always)
-    # 2. OR diffMin <= threshMin AND diffSec >= -120 (within 2 minutes past Azan)
     $shouldShow = ($threshMin -eq 0) -or ($diffMin -le $threshMin -and $diffSec -ge -120)
 
     if ($shouldShow) {
@@ -821,14 +1158,12 @@ function Update-NotchBadge {
             Trigger-AzanAlert $next.Name
         }
 
-        # Progress calculation
         $prog = if ($threshMin -gt 0) {
             [Math]::Max(0.0, [Math]::Min(1.0, 1.0 - ($diffSec / ($threshMin * 60.0))))
         } else {
             $state.Progress
         }
 
-        # Sleek, compact label formatted specifically for Nook's 140px collapsed pill
         $lbl = ""
         if ($diffSec -le 0 -and $diffSec -ge -120) {
             $lbl = "Azan $($next.Name)"
@@ -959,6 +1294,82 @@ while ($true) {
                     Trigger-AzanAlert 'Test'
                     $script:LastAlertPrayer = ''
                 }
+                elseif ($id -eq 'toggle_athkar_enabled') {
+                    $settings.AthkarEnabled = [bool]$val
+                    Save-Settings $settings
+                    Update-Views
+                    Update-NotchBadge
+                }
+                elseif ($id -eq 'chip_athkar_interval') {
+                    $idx = Get-IndexValue $val
+                    if ($idx -ge 0 -and $idx -lt $script:AthkarIntervalValues.Count) {
+                        $settings.AthkarIntervalMin = $script:AthkarIntervalValues[$idx]
+                        Save-Settings $settings
+                        Update-Views
+                    }
+                }
+                elseif ($id -eq 'chip_athkar_lang') {
+                    $idx = Get-IndexValue $val
+                    if ($idx -ge 0 -and $idx -lt $script:AthkarLangValues.Count) {
+                        $settings.AthkarLanguage = $script:AthkarLangValues[$idx]
+                        Save-Settings $settings
+                        Update-Views
+                        Update-NotchBadge
+                    }
+                }
+                elseif ($id -eq 'toggle_athkar_toast') {
+                    $settings.AthkarToast = [bool]$val
+                    Save-Settings $settings
+                    Update-Views
+                }
+                elseif ($id -eq 'toggle_athkar_audio') {
+                    $settings.AthkarAudio = [bool]$val
+                    Save-Settings $settings
+                    Update-Views
+                }
+                elseif ($id -eq 'btn_test_athkar' -or $id -eq 'btn_send_notch') {
+                    Trigger-AthkarAlert $script:CurrentAthkarIdx
+                    Update-NotchBadge
+                }
+                elseif ($id -eq 'btn_tasbeeh_count') {
+                    if ($script:AthkarList.Count -gt 0) {
+                        $aid = [string]$script:AthkarList[$script:CurrentAthkarIdx].id
+                        if (-not $script:TasbeehCounts.ContainsKey($aid)) { $script:TasbeehCounts[$aid] = 0 }
+                        $script:TasbeehCounts[$aid]++
+                        Update-Views
+                    }
+                }
+                elseif ($id -eq 'btn_tasbeeh_reset') {
+                    if ($script:AthkarList.Count -gt 0) {
+                        $aid = [string]$script:AthkarList[$script:CurrentAthkarIdx].id
+                        $script:TasbeehCounts[$aid] = 0
+                        Update-Views
+                    }
+                }
+                elseif ($id -eq 'btn_athkar_prev') {
+                    $count = $script:AthkarList.Count
+                    if ($count -gt 0) {
+                        $script:CurrentAthkarIdx = ($script:CurrentAthkarIdx - 1 + $count) % $count
+                        Update-Views
+                    }
+                }
+                elseif ($id -eq 'btn_athkar_next') {
+                    $count = $script:AthkarList.Count
+                    if ($count -gt 0) {
+                        $script:CurrentAthkarIdx = ($script:CurrentAthkarIdx + 1) % $count
+                        Update-Views
+                    }
+                }
+                elseif ($id.StartsWith('select_athkar_')) {
+                    $idxStr = $id.Substring('select_athkar_'.Length)
+                    try {
+                        $targetIdx = [int]$idxStr
+                        if ($targetIdx -ge 0 -and $targetIdx -lt $script:AthkarList.Count) {
+                            $script:CurrentAthkarIdx = $targetIdx
+                            Update-Views
+                        }
+                    } catch {}
+                }
             }
             'shutdown' {
                 exit 0
@@ -967,6 +1378,17 @@ while ($true) {
     }
 
     $now = Get-Date
+
+    # Periodic Athkar check
+    $settings = Load-Settings
+    if ($settings.AthkarEnabled -and $script:AthkarList.Count -gt 0) {
+        $intervalMin = [int]$settings.AthkarIntervalMin
+        if ($intervalMin -le 0) { $intervalMin = 30 }
+        if (($now - $script:LastAthkarTime).TotalMinutes -ge $intervalMin) {
+            $script:LastAthkarTime = $now
+            Trigger-AthkarAlert
+        }
+    }
 
     if (($now - $script:LastBadgeSecond).TotalSeconds -ge 1) {
         $script:LastBadgeSecond = $now

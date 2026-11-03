@@ -1246,8 +1246,22 @@ impl eframe::App for NookApp {
             }
         });
         let is_hovered = hit_inside || hovered_notch;
+        let badges: Vec<Badge> = self
+            .registry
+            .visible()
+            .filter_map(|m| m.collapsed_badge())
+            .collect();
+        let longest_badge_chars = badges
+            .iter()
+            .filter_map(|b| match b {
+                Badge::Ring { label, .. } => Some(label.chars().count()),
+                _ => None,
+            })
+            .max()
+            .unwrap_or(0);
+        let has_notification = longest_badge_chars > 8;
         let full = self.sys.full_window || self.sys.fullscreen;
-        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || is_hovered;
+        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || is_hovered || has_notification;
         let hidden = self.cfg.hide_in_fullscreen && full && !is_interacting;
 
         let mut clicked = None;
@@ -1260,21 +1274,22 @@ impl eframe::App for NookApp {
         let update_status = self.updater.status();
         let editing = self.editing;
         let page = self.page;
-        let badges: Vec<Badge> = self
-            .registry
-            .visible()
-            .filter_map(|m| m.collapsed_badge())
-            .collect();
         let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
         let mini_mode = !self.cfg.hide_in_fullscreen && self.cfg.mini_in_fullscreen && full;
         let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
+        let badge_extra_w = if longest_badge_chars > 8 {
+            ((longest_badge_chars - 8) as f32 * 7.5).min(140.0)
+        } else {
+            0.0
+        };
+        let effective_w = (base_w + badge_extra_w).clamp(130.0, 360.0);
         if has_media {
             if mini_mode {
                 self.shell.metrics.collapsed = vec2(174.0, 26.0);
                 self.shell.metrics.collapsed_radius = 13.0;
                 self.shell.metrics.top_margin = 4.0;
             } else {
-                let media_w = (base_w + 64.0).max(224.0);
+                let media_w = (effective_w + 64.0).max(224.0);
                 self.shell.metrics.collapsed = vec2(media_w, 34.0);
                 self.shell.metrics.collapsed_radius = 17.0;
                 self.shell.metrics.top_margin = 6.0;
@@ -1284,7 +1299,7 @@ impl eframe::App for NookApp {
             self.shell.metrics.collapsed_radius = 7.0;
             self.shell.metrics.top_margin = 4.0;
         } else {
-            self.shell.metrics.collapsed = vec2(base_w, 34.0);
+            self.shell.metrics.collapsed = vec2(effective_w, 34.0);
             self.shell.metrics.collapsed_radius = 17.0;
             self.shell.metrics.top_margin = 6.0;
         }

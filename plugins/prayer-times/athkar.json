@@ -1,0 +1,146 @@
+[
+  {
+    "id": "subhanallah_bihamdihi",
+    "arabic": "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ ، سُبْحَانَ اللَّهِ الْعَظِيمِ",
+    "short_ar": "سُبْحَانَ اللَّهِ وَبِحَمْدِهِ",
+    "translit": "Subhan Allah wa bihamdihi",
+    "meaning": "Glory be to Allah and His is the praise",
+    "virtue": "كلمتان خفيفتان على اللسان، ثقيلتان في الميزان، حبيبتان إلى الرحمن",
+    "target": 33
+  },
+  {
+    "id": "istighfar",
+    "arabic": "أَسْتَغْفِرُ اللَّهَ الْعَظِيمَ وَأَتُوبُ إِلَيْهِ",
+    "short_ar": "أَسْتَغْفِرُ اللَّهَ وَأَتُوبُ إِلَيْهِ",
+    "translit": "Astaghfirullah wa atubu ilayh",
+    "meaning": "I seek forgiveness from Allah and repent to Him",
+    "virtue": "من لزم الاستغفار جعل الله له من كل هم فرجاً ومن كل ضيق مخرجاً",
+    "target": 100
+  },
+  {
+    "id": "salawat",
+    "arabic": "اللَّهُمَّ صَلِّ وَسَلِّمْ عَلَى نَبِيِّنَا مُحَمَّدٍ",
+    "short_ar": "اللَّهُمَّ صَلِّ عَلَى مُحَمَّدٍ ﷺ",
+    "translit": "Allahumma salli 'ala Muhammad",
+    "meaning": "O Allah, send blessings upon our Prophet Muhammad",
+    "virtue": "من صلى عليّ صلاة صلى الله عليه بها عشراً",
+    "target": 10
+  },
+  {
+    "id": "hawqala",
+    "arabic": "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ الْعَلِيِّ الْعَظِيمِ",
+    "short_ar": "لَا حَوْلَ وَلَا قُوَّةَ إِلَّا بِاللَّهِ",
+    "translit": "La hawla wa la quwwata illa billah",
+    "meaning": "There is no power nor strength except by Allah",
+    "virtue": "كنز عظيم من كنوز الجنة وباب من أبوابها",
+    "target": 33
+  },
+  {
+    "id": "tahlil",
+    "arabic": "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ لَا شَرِيكَ لَهُ، لَهُ الْمُلْكُ وَلَهُ الْحَمْدُ وَهُوَ عَلَى كُلِّ شَيْءٍ قَدِيرٌ",
+    "short_ar": "لَا إِلَهَ إِلَّا اللَّهُ وَحْدَهُ",
+    "translit": "La ilaha illa Allah",
+    "meaning": "None has the right to be worshipped except Allah alone",
+    "virtue": "أفضل ما قاله النبي ﷺ والنبيون من قبله",
+    "target": 100
+  },
+  {
+    "id": "hamd",
+    "arabic": "الْحَمْدُ لِلَّهِ حَمْداً كَثِيراً طَيِّباً مُبَارَكاً فِيهِ",
+    "short_ar": "الْحَمْدُ لِلَّهِ رَبِّ الْعَالَمِينَ",
+    "translit": "Alhamdulillah",
+    "meaning": "All praise is due to Allah",
+    "virtue": "الحمد لله تملأ الميزان",
+    "target": 33
+  },
+  {
+    "id": "tasbih_arba",
+    "arabic": "سُبْحَانَ اللَّهِ ، وَالْحَمْدُ لِلَّهِ ، وَلَا إِلَهَ إِلَّا اللَّهُ ، وَاللَّهُ أَكْبَرُ",
+    "short_ar": "سُبْحَانَ اللَّهِ وَالْحَمْدُ لِلَّهِ",
+    "translit": "Subhan Allah wal-Hamdulillah",
+    "meaning": "Glory be to Allah, all praise to Allah, none worthy of worship but Allah, Allah is Greatest",
+    "virtue": "أحب الكلام إلى الله تعالى وغراس الجنة",
+    "target": 33
+  },
+  {
+    "id": "dhun_noon",
+    "arabic": "لَا إِلَهَ إِلَّا أَنْتَ سُبْحَانَكَ إِنِّي كُنْتُ مِنَ الظَّالِمِينَ",
+    "short_ar": "لَا إِلَهَ إِلَّا أَنْتَ سُبْحَانَكَ",
+    "translit": "La ilaha illa Anta Subhanak",
+    "meaning": "There is no deity except You; exalted are You. Indeed, I have been of the wrongdoers",
+    "virtue": "دعاء يونس عليه السلام ما دعا به مكروب إلا فرج الله عنه",
+    "target": 33
+  },
+  {
+    "id": "hasbiya_allah",
+    "arabic": "حَسْبِيَ اللَّهُ لَا إِلَهَ إِلَّا هُوَ عَلَيْهِ تَوَكَّلْتُ وَهُوَ رَبُّ الْعَرْشِ الْعَظِيمِ",
+    "short_ar": "حَسْبِيَ اللَّهُ وَنِعْمَ الْوَكِيلُ",
+    "translit": "Hasbiya Allahu wa ni'mal wakeel",
+    "meaning": "Allah is sufficient for me; upon Him I have relied, Lord of the Great Throne",
+    "virtue": "من قالها سبع مرات كفاه الله ما أهمه من أمر دنياه وآخرته",
+    "target": 7
+  },
+  {
+    "id": "ya_hayyu_ya_qayyum",
+    "arabic": "يَا حَيُّ يَا قَيُّومُ بِرَحْمَتِكَ أَسْتَغِيثُ ، أَصْلِحْ لِي شَأْنِي كُلَّهُ وَلَا تَكِلْنِي إِلَى نَفْسِي طَرْفَةَ عَيْنٍ",
+    "short_ar": "يَا حَيُّ يَا قَيُّومُ أَسْتَغِيثُ",
+    "translit": "Ya Hayyu Ya Qayyum",
+    "meaning": "O Ever Living, O Sustainer, in Your mercy I seek relief, rectify all my affairs",
+    "virtue": "من أجمع الأدعية المأثورة عن النبي ﷺ في الصباح والمساء",
+    "target": 3
+  },
+  {
+    "id": "afuw",
+    "arabic": "اللَّهُمَّ إِنَّكَ عَفُوٌّ كَرِيمٌ تُحِبُّ الْعَفْوَ فَاعْفُ عَنِّي",
+    "short_ar": "اللَّهُمَّ إِنَّكَ عَفُوٌّ فَاعْفُ عَنِّي",
+    "translit": "Allahumma innaka 'afuwwun",
+    "meaning": "O Allah, You are Pardoning and Generous; You love to pardon, so pardon me",
+    "virtue": "أعظم دعاء لطلب العفو والمغفرة",
+    "target": 33
+  },
+  {
+    "id": "raditu_billah",
+    "arabic": "رَضِيتُ بِاللَّهِ رَبّاً ، وَبِالإِسْلاَمِ دِيناً ، وَبِمُحَمَّدٍ ﷺ نَبِيّاً وَرَسُولاً",
+    "short_ar": "رَضِيتُ بِاللَّهِ رَبّاً وَبِالإِسْلاَمِ دِيناً",
+    "translit": "Raditu billahi Rabba",
+    "meaning": "I am pleased with Allah as my Lord, Islam as my religion, and Muhammad as my Prophet",
+    "virtue": "من قالها ثلاثاً حين يصبح وحين يمسي كان حقاً على الله أن يرضيه",
+    "target": 3
+  },
+  {
+    "id": "ainni_ala_dhikrik",
+    "arabic": "اللَّهُمَّ أَعِنِّي عَلَى ذِكْرِكَ وَشُكْرِكَ وَحُسْنِ عِبَادَتِكَ",
+    "short_ar": "اللَّهُمَّ أَعِنِّي عَلَى ذِكْرِكَ",
+    "translit": "Allahumma a'inni 'ala dhikrik",
+    "meaning": "O Allah, help me remember You, thank You, and worship You in the best manner",
+    "virtue": "وصية رسول الله ﷺ لمعاذ بن جبل رضي الله عنه",
+    "target": 3
+  },
+  {
+    "id": "bismillah_ladhi",
+    "arabic": "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ مَعَ اسْمِهِ شَيْءٌ فِي الْأَرْضِ وَلَا فِي السَّمَاءِ وَهُوَ السَّمِيعُ الْعَلِيمُ",
+    "short_ar": "بِسْمِ اللَّهِ الَّذِي لَا يَضُرُّ",
+    "translit": "Bismillahil-ladhi la yadurru",
+    "meaning": "In the Name of Allah, with Whose Name nothing can cause harm in earth or heaven",
+    "virtue": "من قالها ثلاثاً لم يضره شيء حتى يمسي أو يصبح",
+    "target": 3
+  },
+  {
+    "id": "subhanallah_adada_khalqihi",
+    "arabic": "سُبْحَانَ اللَّهِ عَدَدَ خَلْقِهِ ، وَرِضَا نَفْسِهِ ، وَزِنَةَ عَرْشِهِ ، وَمِدَادَ كَلِمَاتِهِ",
+    "short_ar": "سُبْحَانَ اللَّهِ عَدَدَ خَلْقِهِ",
+    "translit": "Subhan Allah 'adada khalqihi",
+    "meaning": "Glory be to Allah, count of His creation, pleasure of Himself, weight of His Throne",
+    "virtue": "تعدل ساعات طويلة من الذكر والتسبيح المستمر",
+    "target": 3
+  },
+  {
+    "id": "rizq_tayyib",
+    "arabic": "اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْماً نَافِعاً ، وَرِزْقاً طَيِّباً ، وَعَمَلاً مُتَقَبَّلاً",
+    "short_ar": "اللَّهُمَّ إِنِّي أَسْأَلُكَ عِلْماً نَافِعاً",
+    "translit": "Allahumma inni as'aluka 'ilman nafi'a",
+    "meaning": "O Allah, I ask You for beneficial knowledge, good provision, and accepted deeds",
+    "virtue": "دعاء النبي ﷺ عند الصباح بعد السلام من صلاة الفجر",
+    "target": 1
+  }
+]
