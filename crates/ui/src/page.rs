@@ -59,7 +59,7 @@ pub fn show(
             }
             hui.add_space(4.0);
             hui.label(
-                egui::RichText::new(title)
+                egui::RichText::new(crate::arabic::shape_bidi(title))
                     .font(Theme::font_semibold(SIZE_BODY + 1.0))
                     .color(theme.text),
             );

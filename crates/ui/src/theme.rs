@@ -294,12 +294,21 @@ pub fn install_fonts(ctx: &egui::Context) {
 
     let regular = load("segoeui.ttf");
     let semibold = load("seguisb.ttf");
+    let arial = load("arial.ttf");
     if let Some(bytes) = regular {
         fonts
             .font_data
             .insert("segoe".into(), FontData::from_owned(bytes).into());
         if let Some(list) = fonts.families.get_mut(&FontFamily::Proportional) {
             list.insert(0, "segoe".into());
+        }
+    }
+    if let Some(bytes) = arial {
+        fonts
+            .font_data
+            .insert("arial".into(), FontData::from_owned(bytes).into());
+        if let Some(list) = fonts.families.get_mut(&FontFamily::Proportional) {
+            list.push("arial".into());
         }
     }
     let mut semibold_family = fonts

@@ -2,6 +2,7 @@
 //! the bento grid, and the `Module` trait.
 
 pub mod anim;
+pub mod arabic;
 pub mod bento;
 pub mod geometry;
 pub mod module;

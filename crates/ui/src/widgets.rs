@@ -87,7 +87,7 @@ pub fn segmented(ui: &mut Ui, options: &[&str], selected: &mut usize, theme: &Th
         .iter()
         .map(|o| {
             ui.painter()
-                .layout_no_wrap((*o).to_owned(), font.clone(), theme.text)
+                .layout_no_wrap(crate::arabic::shape_bidi(o), font.clone(), theme.text)
                 .size()
                 .x
         })
@@ -132,7 +132,7 @@ pub fn segmented(ui: &mut Ui, options: &[&str], selected: &mut usize, theme: &Th
         let c = pos2(rect.min.x + 2.0 + seg_w * (i as f32 + 0.5), rect.center().y);
         let near = 1.0 - (pos - i as f32).abs().min(1.0);
         let color = mix(theme.text_dim, theme.text, near);
-        painter.text(c, Align2::CENTER_CENTER, *o, font.clone(), color);
+        painter.text(c, Align2::CENTER_CENTER, crate::arabic::shape_bidi(o), font.clone(), color);
     }
     resp
 }
@@ -329,7 +329,7 @@ pub fn disclosure_header(
         false,
     );
     let title_g = painter.layout_no_wrap(
-        title.to_owned(),
+        crate::arabic::shape_bidi(title),
         Theme::font(crate::theme::SIZE_BODY),
         theme.text,
     );
@@ -340,7 +340,7 @@ pub fn disclosure_header(
     painter.text(
         pos2(tx + title_w + 10.0, cy),
         Align2::LEFT_CENTER,
-        summary,
+        crate::arabic::shape_bidi(summary),
         Theme::font(SIZE_LABEL),
         with_alpha(theme.text_faint, 1.0 - open.clamp(0.0, 1.0)),
     );

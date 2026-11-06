@@ -61,7 +61,7 @@ pub fn button(
     };
     painter.rect_filled(r, r.height() * 0.5, fill);
     let font = Theme::font_semibold(SIZE_LABEL);
-    let galley = painter.layout_no_wrap(label.to_owned(), font, fg);
+    let galley = painter.layout_no_wrap(nook_ui::arabic::shape_bidi(label), font, fg);
     let icon_w = match (icon, label.is_empty()) {
         (Some(_), true) => 0.0,
         (Some(_), false) => 18.0,
@@ -119,7 +119,7 @@ pub fn chip(ui: &mut Ui, rect: Rect, label: &str, selected: bool, theme: &Theme)
     painter.text(
         rect.center(),
         Align2::CENTER_CENTER,
-        label,
+        nook_ui::arabic::shape_bidi(label),
         Theme::font_semibold(SIZE_LABEL),
         color,
     );

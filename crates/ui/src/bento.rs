@@ -537,11 +537,15 @@ pub fn show(
                         }
                     } else if resp.clicked() && ready {
                         if compact && !is_open {
-                            expanded = Expanded {
-                                id: Some(tile.module.id()),
-                                since: now,
-                                reveal: true,
-                            };
+                            if tile.module.id().starts_with("plugin:") || tile.module.page_size().is_some() {
+                                out.clicked = Some(tile.module.id());
+                            } else {
+                                expanded = Expanded {
+                                    id: Some(tile.module.id()),
+                                    since: now,
+                                    reveal: true,
+                                };
+                            }
                         } else {
                             out.clicked = Some(tile.module.id());
                         }

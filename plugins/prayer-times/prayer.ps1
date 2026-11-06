@@ -1124,7 +1124,7 @@ function Update-NotchBadge {
         $lbl = switch ($lang) {
             0 { "$($script:ActiveAthkar.short_ar)" }
             2 { "Dhikr: $($script:ActiveAthkar.translit)" }
-            default { "Dhikr: $($script:ActiveAthkar.short_ar)" }
+            default { "$($script:ActiveAthkar.short_ar)" }
         }
 
         Send-Msg @{

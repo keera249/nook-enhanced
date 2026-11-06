@@ -749,7 +749,8 @@ fn ink_text(
     cy: f32,
     from_right: bool,
 ) -> Rect {
-    let galley = painter.layout_no_wrap(text.to_owned(), font, color);
+    let shaped = nook_ui::arabic::shape_bidi(text);
+    let galley = painter.layout_no_wrap(shaped, font, color);
     let ink = galley.mesh_bounds;
     let dx = if from_right {
         x - ink.max.x
@@ -864,7 +865,7 @@ fn draw_pill(badges: Vec<Badge>, battery: Option<Battery>, ui: &mut Ui, rect: Re
                 SIZE_LABEL + 1.0
             });
             let mut job = egui::text::LayoutJob::single_section(
-                title.to_owned(),
+                nook_ui::arabic::shape_bidi(title),
                 egui::text::TextFormat::simple(font, theme.pill_text),
             );
             job.wrap = egui::text::TextWrapping {
@@ -1251,17 +1252,36 @@ impl eframe::App for NookApp {
             .visible()
             .filter_map(|m| m.collapsed_badge())
             .collect();
-        let longest_badge_chars = badges
-            .iter()
-            .filter_map(|b| match b {
-                Badge::Ring { label, .. } => Some(label.chars().count()),
-                _ => None,
-            })
-            .max()
-            .unwrap_or(0);
-        let has_notification = longest_badge_chars > 8;
+        let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
+        let has_notification = badges.iter().any(|b| match b {
+            Badge::Ring { label, .. } => !label.trim().is_empty(),
+            Badge::Pulse => true,
+            Badge::Glyph { .. } => true,
+            Badge::Media { .. } => false,
+        });
+        let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
+        let mut notif_extra_w = 0.0f32;
+        for b in &badges {
+            match b {
+                Badge::Ring { label, .. } if !label.trim().is_empty() => {
+                    let char_count = label.chars().count();
+                    let needed = (char_count as f32 * 8.8 + 125.0) - base_w;
+                    if needed > notif_extra_w {
+                        notif_extra_w = needed;
+                    }
+                }
+                Badge::Pulse => {
+                    notif_extra_w = notif_extra_w.max(38.0);
+                }
+                Badge::Glyph { .. } => {
+                    notif_extra_w = notif_extra_w.max(28.0);
+                }
+                _ => {}
+            }
+        }
+        let effective_w = (base_w + notif_extra_w.max(0.0)).clamp(130.0, 420.0);
         let full = self.sys.full_window || self.sys.fullscreen;
-        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || is_hovered || has_notification;
+        let is_interacting = self.shell.state.is_open() || self.shell.hold_open || is_hovered || has_notification || has_media;
         let hidden = self.cfg.hide_in_fullscreen && full && !is_interacting;
 
         let mut clicked = None;
@@ -1274,15 +1294,12 @@ impl eframe::App for NookApp {
         let update_status = self.updater.status();
         let editing = self.editing;
         let page = self.page;
-        let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
-        let mini_mode = !self.cfg.hide_in_fullscreen && self.cfg.mini_in_fullscreen && full;
-        let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
-        let badge_extra_w = if longest_badge_chars > 8 {
-            ((longest_badge_chars - 8) as f32 * 7.5).min(140.0)
+        let mini_mode = !self.cfg.hide_in_fullscreen && self.cfg.mini_in_fullscreen && full && !has_notification && !has_media;
+        let (pill_h, pill_r) = if has_notification {
+            (36.0, 18.0)
         } else {
-            0.0
+            (34.0, 17.0)
         };
-        let effective_w = (base_w + badge_extra_w).clamp(130.0, 360.0);
         if has_media {
             if mini_mode {
                 self.shell.metrics.collapsed = vec2(174.0, 26.0);
@@ -1299,8 +1316,8 @@ impl eframe::App for NookApp {
             self.shell.metrics.collapsed_radius = 7.0;
             self.shell.metrics.top_margin = 4.0;
         } else {
-            self.shell.metrics.collapsed = vec2(effective_w, 34.0);
-            self.shell.metrics.collapsed_radius = 17.0;
+            self.shell.metrics.collapsed = vec2(effective_w, pill_h);
+            self.shell.metrics.collapsed_radius = pill_r;
             self.shell.metrics.top_margin = 6.0;
         }
         let battery = self.sys.battery;
