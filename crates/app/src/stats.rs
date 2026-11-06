@@ -70,31 +70,19 @@ impl Stats {
     /// created the id (a new install); `builtin` lists the tools that may
     /// be counted by name.
     pub fn start(
-        install_id: String,
-        first: bool,
-        enabled: bool,
+        _install_id: String,
+        _first: bool,
+        _enabled: bool,
         builtin: HashSet<&'static str>,
     ) -> Self {
-        let flag = Arc::new(AtomicBool::new(enabled));
-        let usage = Arc::new(Mutex::new(load_usage().unwrap_or_default()));
-        let stats = Self {
-            enabled: flag.clone(),
-            usage: usage.clone(),
+        let flag = Arc::new(AtomicBool::new(false));
+        let usage = Arc::new(Mutex::new(Usage::default()));
+        Self {
+            enabled: flag,
+            usage,
             builtin,
             open_since: None,
-        };
-        if crate::update::installed_dir().is_none() {
-            // Dev builds and loose exes would only skew the numbers.
-            stats.enabled.store(false, Ordering::Relaxed);
-            return stats;
         }
-        let spawned = std::thread::Builder::new()
-            .name("nook-stats".into())
-            .spawn(move || run(&install_id, first, &flag, &usage));
-        if let Err(e) = spawned {
-            tracing::warn!("spawning stats thread: {e}");
-        }
-        stats
     }
 
     pub fn set_enabled(&self, on: bool) {

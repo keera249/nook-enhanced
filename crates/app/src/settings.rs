@@ -1,6 +1,6 @@
 //! Settings: the gear tile in the bento grid and the in-notch settings page.
 
-use crate::config::{AccentSource, Config, GrainSize, Material, MonitorMode, Renderer};
+use crate::config::{AccentSource, Config, GrainSize, Material, MonitorMode, NotchShape, Renderer};
 use crate::update::{self, Status};
 use egui::{
     Align, Align2, Area, Color32, Id, Layout, Order, Rect, Sense, Stroke, Ui, UiBuilder, pos2, vec2,
@@ -19,8 +19,8 @@ pub const SETTINGS_ID: &str = "settings";
 const GAP: f32 = 8.0;
 const HEADER: f32 = 28.0;
 const ROW: f32 = 28.0;
-/// Height of the Appearance and Behavior cards (title + six rows).
-const TOP_CARD: f32 = 210.0;
+/// Height of the Appearance and Behavior cards (title + seven rows).
+const TOP_CARD: f32 = 238.0;
 const WIDTH_MIN: u32 = 140;
 const WIDTH_MAX: u32 = 280;
 /// Height of a collapsible card's clickable header.
@@ -250,6 +250,18 @@ pub fn page(
                 cfg.placement = Placement::ALL[pos_idx];
                 out.changed = true;
             }
+            let mut shape_idx = match cfg.notch_shape {
+                NotchShape::Island => 0,
+                NotchShape::Notch => 1,
+            };
+            if row(&mut lui, "Shape", theme, |ui| {
+                widgets::segmented(ui, &["Island", "Notch"], &mut shape_idx, theme).on_hover_text(
+                    "Island floats slightly below the top edge; Notch hangs flush against the top screen bezel",
+                )
+            }) {
+                cfg.notch_shape = [NotchShape::Island, NotchShape::Notch][shape_idx];
+                out.changed = true;
+            }
             let width_span = (WIDTH_MAX - WIDTH_MIN) as f32;
             let current_w = (if cfg.notch_width == 0 { 180 } else { cfg.notch_width }).clamp(WIDTH_MIN, WIDTH_MAX);
             let mut width_t = (current_w - WIDTH_MIN) as f32 / width_span;
@@ -378,63 +390,16 @@ pub fn page(
     out
 }
 
-/// Right end of the header: the running version and either the Update
-/// chip or a "Check for updates" button with the last result.
-fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, status: &Status, out: &mut PageOutput) {
-    let version = format!("Nook {}", update::CURRENT);
-    let font = Theme::font(SIZE_LABEL);
-    let right = pos2(header.max.x, header.center().y);
-    if let Some(chip) = update::chip(ui, right, Align2::RIGHT_CENTER, status, theme) {
-        out.install_update = chip.clicked;
-        ui.painter().text(
-            pos2(chip.rect.min.x - 10.0, header.center().y),
-            Align2::RIGHT_CENTER,
-            version,
-            font,
-            theme.text_faint,
-        );
-        return;
-    }
-    let button = Rect::from_min_size(
-        pos2(header.max.x - 136.0, header.center().y - 13.0),
-        vec2(136.0, 26.0),
-    );
-    let checking = *status == Status::Checking;
-    let resp = ui
-        .add_enabled_ui(!checking, |ui| {
-            nook_modules::kit::button(
-                ui,
-                button,
-                if checking {
-                    "Checking…"
-                } else {
-                    "Check for updates"
-                },
-                Some(icons::ARROW_CLOCKWISE),
-                false,
-                theme,
-            )
-        })
-        .inner;
-    if resp.clicked() {
-        out.check_update = true;
-    }
-    let note = match status {
-        Status::UpToDate => format!("{version} · up to date"),
-        Status::Failed(e) => e.clone(),
-        _ => version,
-    };
-    let color = if matches!(status, Status::Failed(_)) {
-        theme.text_dim
-    } else {
-        theme.text_faint
-    };
+/// Right end of the header: the running version of Nook Enhanced Edition.
+fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, _status: &Status, _out: &mut PageOutput) {
+    let version = format!("Nook Enhanced v{}", update::CURRENT);
+    let font = Theme::font_semibold(SIZE_LABEL);
     ui.painter().text(
-        pos2(button.min.x - 10.0, header.center().y),
+        pos2(header.max.x - 4.0, header.center().y),
         Align2::RIGHT_CENTER,
-        note,
+        version,
         font,
-        color,
+        theme.text_dim,
     );
 }
 
@@ -460,9 +425,9 @@ fn customize_summary(cfg: &Config) -> String {
 fn advanced_summary(cfg: &Config) -> String {
     let on = |b: bool| if b { "on" } else { "off" };
     format!(
-        "Dev mode {} · usage stats {}",
+        "Dev mode {} · {}",
         on(cfg.plugin_dev),
-        on(cfg.usage_stats)
+        crate::diag::active_renderer()
     )
 }
 
@@ -672,18 +637,6 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
         out.changed = true;
     }
     hint(&mut lui, "Restarts a plugin when you save its files", theme);
-    let mut usage = cfg.usage_stats;
-    if row(&mut rui, "Anonymous usage stats", theme, |ui| {
-        widgets::toggle(ui, &mut usage, theme)
-    }) {
-        cfg.usage_stats = usage;
-        out.changed = true;
-    }
-    hint(
-        &mut rui,
-        "Daily: version, opens, minutes, tools used",
-        theme,
-    );
 
     let mut renderer_idx = match cfg.renderer {
         Renderer::Auto => 0,
@@ -703,8 +656,7 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
         theme,
     );
 
-    // "Open log" at the right, level with the Renderer row.
-    rui.add_space(ROW - 26.0);
+    // "Open log" at the right.
     let w = rui.available_width();
     let (log_row, _) = rui.allocate_exact_size(vec2(w, ROW), Sense::hover());
     let open_log = Rect::from_min_size(

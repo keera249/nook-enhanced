@@ -8,17 +8,18 @@
 
 use egui::text::{LayoutJob, TextFormat, TextWrapping};
 use egui::{
-    Align2, Color32, ColorImage, Pos2, Rect, Response, TextureHandle, TextureOptions, Ui,
+    Align2, Color32, ColorImage, Pos2, Rect, Response, Sense, TextureHandle, TextureOptions, Ui,
     UiBuilder, pos2, vec2,
 };
 use nook_platform::media::{MediaCommand, MediaWatcher, NowPlaying};
 use nook_ui::module::{Badge, Module, TileCtx, TileSize};
-use nook_ui::theme::{SIZE_LABEL, Theme, with_alpha};
+use nook_ui::theme::{SIZE_BODY, SIZE_LABEL, Theme, with_alpha};
 use nook_ui::{icons, paint, widgets};
 use std::sync::Arc;
 use std::time::Duration;
 
 const ART: f32 = 44.0;
+const PAGE_ART: f32 = 136.0;
 
 #[derive(Default)]
 pub struct Media {
@@ -27,6 +28,7 @@ pub struct Media {
     /// Texture for `now.art`, keyed by the art's allocation.
     art: Option<(usize, TextureHandle)>,
     ctx: Option<egui::Context>,
+    open_page: bool,
 }
 
 impl Media {
@@ -49,9 +51,10 @@ impl Media {
     }
 }
 
-/// Single-line text, elided with "…" to `width`.
+/// Single-line text, elided with "…" to `width` (with Arabic shaping).
 fn text_line(ui: &Ui, pos: Pos2, text: &str, width: f32, font: egui::FontId, color: Color32) {
-    let mut job = LayoutJob::single_section(text.to_owned(), TextFormat::simple(font, color));
+    let shaped = nook_ui::arabic::shape_bidi(text);
+    let mut job = LayoutJob::single_section(shaped, TextFormat::simple(font, color));
     job.wrap = TextWrapping {
         max_width: width,
         max_rows: 1,
@@ -157,6 +160,207 @@ impl Module for Media {
         (tile_visible && n.playing && n.timeline.is_some()).then(|| Duration::from_secs(1))
     }
 
+    fn take_page_request(&mut self) -> bool {
+        std::mem::take(&mut self.open_page)
+    }
+
+    fn page_size(&self) -> Option<egui::Vec2> {
+        Some(vec2(568.0, 236.0))
+    }
+
+    fn ui_page(
+        &mut self,
+        ui: &mut Ui,
+        header: &mut Ui,
+        body: Rect,
+        theme: &Theme,
+    ) -> bool {
+        let Some(now) = self.now.clone() else {
+            let c = body.center();
+            paint::icon(
+                ui.painter(),
+                c - vec2(0.0, 12.0),
+                icons::MUSIC_NOTES,
+                32.0,
+                theme.text_faint,
+                false,
+            );
+            ui.painter().text(
+                c + vec2(0.0, 18.0),
+                Align2::CENTER_CENTER,
+                "Nothing playing right now",
+                Theme::font(SIZE_BODY),
+                theme.text_dim,
+            );
+            return false;
+        };
+
+        if !now.source.is_empty() {
+            header.label(
+                egui::RichText::new(&now.source)
+                    .font(Theme::font_semibold(SIZE_LABEL))
+                    .color(theme.accent_fg()),
+            );
+        }
+
+        let inner = body.shrink2(vec2(6.0, 4.0));
+        let art_rect = Rect::from_min_size(
+            pos2(inner.min.x, inner.center().y - PAGE_ART * 0.5),
+            vec2(PAGE_ART, PAGE_ART),
+        );
+        match self.art_texture(ui.ctx()) {
+            Some(tex) => {
+                rounded_image(ui, art_rect, tex, 16.0);
+                ui.painter().rect_stroke(
+                    art_rect,
+                    16.0,
+                    egui::Stroke::new(1.0, with_alpha(theme.tile_rim, 0.7)),
+                    egui::StrokeKind::Inside,
+                );
+            }
+            None => {
+                widgets::card(ui.painter(), art_rect, theme);
+                paint::icon(
+                    ui.painter(),
+                    art_rect.center(),
+                    icons::MUSIC_NOTES,
+                    40.0,
+                    theme.text_faint,
+                    false,
+                );
+            }
+        }
+
+        let col_x = art_rect.max.x + 18.0;
+        let col_w = (inner.max.x - col_x).max(80.0);
+        let top_y = art_rect.min.y + 4.0;
+
+        let title = if now.title.is_empty() {
+            "Unknown title"
+        } else {
+            &now.title
+        };
+        text_line(
+            ui,
+            pos2(col_x, top_y),
+            title,
+            col_w,
+            Theme::font_semibold(SIZE_BODY + 3.0),
+            theme.text,
+        );
+        let artist = if now.artist.is_empty() {
+            &now.source
+        } else {
+            &now.artist
+        };
+        text_line(
+            ui,
+            pos2(col_x, top_y + 24.0),
+            artist,
+            col_w,
+            Theme::font(SIZE_BODY),
+            theme.text_dim,
+        );
+
+        // Interactive seek bar & timestamps.
+        let bar_y = top_y + 62.0;
+        if let Some((pos, dur)) = now.position() {
+            let track_rect = Rect::from_min_size(pos2(col_x, bar_y), vec2(col_w, 6.0));
+            let hit_rect = track_rect.expand2(vec2(4.0, 8.0));
+            let resp = ui.interact(
+                hit_rect,
+                egui::Id::new("nook-media-page-seek"),
+                Sense::click_and_drag(),
+            );
+            let mut frac = (pos / dur.max(1.0)).clamp(0.0, 1.0) as f32;
+            if (resp.dragged() || resp.clicked())
+                && let Some(p) = resp.interact_pointer_pos()
+            {
+                frac = ((p.x - track_rect.min.x) / track_rect.width().max(1.0)).clamp(0.0, 1.0);
+                let target = f64::from(frac) * dur;
+                self.send(MediaCommand::Seek(target));
+                if let Some(n) = &mut self.now {
+                    n.timeline = Some((target, dur));
+                    n.captured = std::time::Instant::now();
+                }
+            }
+
+            ui.painter()
+                .rect_filled(track_rect, 3.0, with_alpha(theme.text_faint, 0.28));
+            let mut fill = track_rect;
+            fill.set_width(track_rect.width() * frac);
+            ui.painter().rect_filled(fill, 3.0, theme.accent_fg());
+            if resp.hovered() || resp.dragged() {
+                let knob_x = track_rect.min.x + track_rect.width() * frac;
+                ui.painter()
+                    .circle_filled(pos2(knob_x, track_rect.center().y), 5.5, theme.text);
+            }
+
+            ui.painter().text(
+                pos2(col_x, bar_y + 16.0),
+                Align2::LEFT_CENTER,
+                mmss(f64::from(frac) * dur),
+                Theme::font(SIZE_LABEL),
+                theme.text_dim,
+            );
+            ui.painter().text(
+                pos2(col_x + col_w, bar_y + 16.0),
+                Align2::RIGHT_CENTER,
+                mmss(dur),
+                Theme::font(SIZE_LABEL),
+                theme.text_dim,
+            );
+        } else {
+            ui.painter().text(
+                pos2(col_x, bar_y + 6.0),
+                Align2::LEFT_CENTER,
+                if now.playing { "Playing live" } else { "Paused" },
+                Theme::font(SIZE_LABEL),
+                theme.text_dim,
+            );
+        }
+
+        // Transport controls centered in the right column bottom.
+        let ctrl_y = art_rect.max.y - 16.0;
+        let cx = col_x + col_w * 0.5;
+        let gap = 44.0;
+        if now.can_previous
+            && button_at(ui, pos2(cx - gap, ctrl_y), 30.0, icons::SKIP_BACK, false, theme)
+                .on_hover_text("Previous")
+                .clicked()
+        {
+            self.send(MediaCommand::Previous);
+        }
+        let (glyph, tip) = if now.playing {
+            (icons::PAUSE, "Pause")
+        } else {
+            (icons::PLAY, "Play")
+        };
+        if now.can_toggle
+            && button_at(ui, pos2(cx, ctrl_y), 36.0, glyph, true, theme)
+                .on_hover_text(tip)
+                .clicked()
+        {
+            self.send(MediaCommand::PlayPause);
+            if let Some(n) = &mut self.now {
+                if let Some((pos, dur)) = n.position() {
+                    n.timeline = Some((pos, dur));
+                    n.captured = std::time::Instant::now();
+                }
+                n.playing = !n.playing;
+            }
+        }
+        if now.can_next
+            && button_at(ui, pos2(cx + gap, ctrl_y), 30.0, icons::SKIP_FORWARD, false, theme)
+                .on_hover_text("Next")
+                .clicked()
+        {
+            self.send(MediaCommand::Next);
+        }
+
+        false
+    }
+
     fn ui_tile(&mut self, ui: &mut Ui, ctx: &mut TileCtx<'_>) {
         let theme = ctx.theme;
         let rect = ui.max_rect();
@@ -258,6 +462,7 @@ impl Module for Media {
         );
 
         // Transport.
+        let mut transport_clicked = false;
         let y = rect.max.y - 11.0;
         let cx = rect.center().x;
         let gap = 34.0;
@@ -267,6 +472,7 @@ impl Module for Media {
                 .clicked()
         {
             self.send(MediaCommand::Previous);
+            transport_clicked = true;
         }
         let (glyph, tip) = if now.playing {
             (icons::PAUSE, "Pause")
@@ -279,6 +485,7 @@ impl Module for Media {
                 .clicked()
         {
             self.send(MediaCommand::PlayPause);
+            transport_clicked = true;
             // Flip right away; the next snapshot confirms it.
             if let Some(n) = &mut self.now {
                 if let Some((pos, dur)) = n.position() {
@@ -301,6 +508,18 @@ impl Module for Media {
             .clicked()
         {
             self.send(MediaCommand::Next);
+            transport_clicked = true;
+        }
+
+        // Clicking anywhere on the upper part of the media tile opens the full Media Player page.
+        let open_hit = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.max.y - 26.0));
+        if !transport_clicked
+            && ui
+                .interact(open_hit, egui::Id::new("nook-media-open-page"), Sense::click())
+                .on_hover_text("Open Media Player")
+                .clicked()
+        {
+            self.open_page = true;
         }
     }
 }

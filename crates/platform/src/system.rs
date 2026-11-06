@@ -185,6 +185,18 @@ pub fn clock() -> Clock {
     let read = |buf: &[u16], n: i32| {
         let n = (n.max(1) as usize - 1).min(buf.len());
         String::from_utf16_lossy(&buf[..n])
+            .chars()
+            .filter(|c| {
+                !matches!(
+                    *c,
+                    '\u{200E}'
+                        | '\u{200F}'
+                        | '\u{061C}'
+                        | '\u{202A}'..='\u{202E}'
+                        | '\u{2066}'..='\u{2069}'
+                )
+            })
+            .collect::<String>()
     };
     // SAFETY: buffers are sized and the SYSTEMTIME is a local value; a null
     // locale name means the user default.

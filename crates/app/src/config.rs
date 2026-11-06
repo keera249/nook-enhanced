@@ -40,6 +40,16 @@ pub enum Material {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub enum NotchShape {
+    /// Floating Dynamic Island pill with a small top gap.
+    #[default]
+    Island,
+    /// Hardware notch flush against the top edge of the screen.
+    Notch,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Renderer {
     /// DirectX 12, falling back to OpenGL when it cannot start.
     #[default]
@@ -100,6 +110,9 @@ pub struct Config {
     pub grain_size: GrainSize,
     /// Top-left corner, top center or top-right corner.
     pub placement: Placement,
+    /// Floating island pill or hardware notch flush with the top edge.
+    #[serde(default)]
+    pub notch_shape: NotchShape,
     /// Above all windows (true) or behind them.
     pub on_top: bool,
     /// Fade the notch out while a fullscreen app (game, video) is in front
@@ -143,6 +156,7 @@ impl Default for Config {
             grain: DEFAULT_GRAIN,
             grain_size: GrainSize::Fine,
             placement: Placement::Center,
+            notch_shape: NotchShape::Island,
             on_top: true,
             hide_in_fullscreen: false,
             mini_in_fullscreen: true,
@@ -152,8 +166,8 @@ impl Default for Config {
             launch_at_startup: false,
             toggle_hotkey: "ctrl+alt+N".into(),
             plugin_dev: false,
-            check_updates: true,
-            usage_stats: true,
+            check_updates: false,
+            usage_stats: false,
             renderer: Renderer::Auto,
             install_id: String::new(),
             modules: ModulesConfig {

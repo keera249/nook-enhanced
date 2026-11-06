@@ -55,6 +55,8 @@ pub struct ShellMetrics {
     pub top_margin: f32,
     /// Gap between the side of the monitor and a notch in a corner.
     pub side_margin: f32,
+    /// Flat top edge (90-degree top corners) for hardware notch shape.
+    pub flat_top: bool,
 }
 
 impl Default for ShellMetrics {
@@ -67,6 +69,7 @@ impl Default for ShellMetrics {
             expanded_radius: 32.0,
             top_margin: 6.0,
             side_margin: 6.0,
+            flat_top: false,
         }
     }
 }
@@ -200,6 +203,7 @@ impl Shell {
         let exponent = lerp(2.0, CORNER_EXPONENT, progress.clamp(0.0, 1.0));
         Squircle::new(Rect::from_min_size(min, size), radius.min(size.y * 0.5))
             .with_exponent(exponent)
+            .with_flat_top(m.flat_top)
     }
 
     /// Runs one frame. `hidden` fades the whole shell out (fullscreen apps).
@@ -328,7 +332,7 @@ impl Shell {
         );
 
         // Collapsed badges fade out as the shell grows.
-        let pill_alpha = (1.0 - progress / 0.35).clamp(0.0, 1.0) * opacity;
+        let pill_alpha = (1.0 - progress / 0.28).clamp(0.0, 1.0) * opacity;
         if pill_alpha > 0.01 {
             let mut pill_ui = ui.new_child(egui::UiBuilder::new().max_rect(shape.rect));
             pill_ui.set_clip_rect(shape.rect);
@@ -336,8 +340,9 @@ impl Shell {
             pill(&mut pill_ui, shape.rect, pill_alpha);
         }
 
-        // Content: fade (100 ms) + stagger once the shell is ~60% open.
-        if targets.content_open && progress >= 0.6 && self.reveal_start.is_none() {
+        // Content: fade (100 ms) + stagger as the shell opens so there is
+        // no moment of empty glass.
+        if targets.content_open && progress >= 0.28 && self.reveal_start.is_none() {
             self.reveal_start = Some(now);
         }
         if !targets.content_open {

@@ -29,7 +29,7 @@ pub struct Art {
     pub rgba: Vec<u8>,
 }
 
-pub const ART_SIZE: u32 = 96;
+pub const ART_SIZE: u32 = 180;
 
 /// What is playing right now.
 #[derive(Clone, Debug)]
@@ -63,11 +63,13 @@ impl NowPlaying {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq)]
 pub enum MediaCommand {
     PlayPause,
     Next,
     Previous,
+    /// Seek to playback position in seconds.
+    Seek(f64),
 }
 
 enum Msg {
@@ -245,6 +247,10 @@ fn command(session: &Session, cmd: MediaCommand) -> Result<()> {
         MediaCommand::PlayPause => session.TryTogglePlayPauseAsync(),
         MediaCommand::Next => session.TrySkipNextAsync(),
         MediaCommand::Previous => session.TrySkipPreviousAsync(),
+        MediaCommand::Seek(secs) => {
+            let ticks = (secs.max(0.0) * TICKS).round() as i64;
+            session.TryChangePlaybackPositionAsync(ticks)
+        }
     }
     .api("TryControlAsync")?;
     op.join().api("TryControlAsync.join")?;

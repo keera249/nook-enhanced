@@ -2,7 +2,7 @@
 //! watcher, and keeps the OS window (position, region, material) in sync
 //! with what the shell draws.
 
-use crate::config::{AccentSource, Config, Material, MonitorMode};
+use crate::config::{AccentSource, Config, Material, MonitorMode, NotchShape};
 use crate::settings::{self, SETTINGS_ID, SettingsTile};
 use crate::stats::{self, Stats};
 use crate::tray::{Tray, TrayCommand};
@@ -571,7 +571,9 @@ impl NookApp {
             if let Some(s) = shape {
                 // A point of slack so the anti-aliased edge still counts.
                 let padded =
-                    Squircle::new(s.rect.expand(2.0), s.radius + 2.0).with_exponent(s.exponent);
+                    Squircle::new(s.rect.expand(2.0), s.radius + 2.0)
+                        .with_exponent(s.exponent)
+                        .with_flat_top(s.flat_top);
                 polygons.push(
                     padded
                         .outline()
@@ -1223,11 +1225,18 @@ impl eframe::App for NookApp {
         #[cfg(feature = "debug-overlay")]
         self.overlay.begin();
         let ctx = ui.ctx().clone();
+        let full = self.sys.full_window || self.sys.fullscreen;
+        let mut look = self.cfg.look();
+        if full {
+            // Auto-contrast: boost glass solidity slightly when a maximized
+            // or fullscreen window sits behind the notch so text stays readable.
+            look.glass_opacity = (look.glass_opacity + 0.14).min(0.96);
+        }
         let theme = Theme::styled(
             self.dark(),
             self.accent(),
             self.material.translucent(),
-            &self.cfg.look(),
+            &look,
         );
         let window = ctx.content_rect();
         let hit_inside = self.hit.as_ref().is_some_and(HitTester::inside);
@@ -1311,6 +1320,8 @@ impl eframe::App for NookApp {
             && !has_media
             && !is_hovered
             && !self.shell.state.is_open();
+        let is_notch_shape = self.cfg.notch_shape == NotchShape::Notch;
+        self.shell.metrics.flat_top = is_notch_shape;
         let (pill_h, pill_r) = if has_notification {
             (36.0, 18.0)
         } else {
@@ -1320,21 +1331,21 @@ impl eframe::App for NookApp {
             if mini_mode {
                 self.shell.metrics.collapsed = vec2(174.0, 26.0);
                 self.shell.metrics.collapsed_radius = 13.0;
-                self.shell.metrics.top_margin = 4.0;
+                self.shell.metrics.top_margin = if is_notch_shape { 0.0 } else { 4.0 };
             } else {
                 let media_w = (effective_w + 64.0).max(224.0);
                 self.shell.metrics.collapsed = vec2(media_w, 34.0);
                 self.shell.metrics.collapsed_radius = 17.0;
-                self.shell.metrics.top_margin = 6.0;
+                self.shell.metrics.top_margin = if is_notch_shape { 0.0 } else { 6.0 };
             }
         } else if mini_mode {
             self.shell.metrics.collapsed = vec2(58.0, 14.0);
             self.shell.metrics.collapsed_radius = 7.0;
-            self.shell.metrics.top_margin = 4.0;
+            self.shell.metrics.top_margin = if is_notch_shape { 0.0 } else { 4.0 };
         } else {
             self.shell.metrics.collapsed = vec2(effective_w, pill_h);
             self.shell.metrics.collapsed_radius = pill_r;
-            self.shell.metrics.top_margin = 6.0;
+            self.shell.metrics.top_margin = if is_notch_shape { 0.0 } else { 6.0 };
         }
         let battery = self.sys.battery;
         let composited = self.backdrop.is_some();

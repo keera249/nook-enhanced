@@ -17,6 +17,8 @@ pub struct Squircle {
     pub radius: f32,
     /// Corner superellipse exponent (2 = circular arc).
     pub exponent: f32,
+    /// Flat top edge (90-degree top corners) for hardware notch shape.
+    pub flat_top: bool,
 }
 
 impl Squircle {
@@ -26,6 +28,7 @@ impl Squircle {
             rect,
             radius: radius.clamp(0.0, max_r.max(0.0)),
             exponent: CORNER_EXPONENT,
+            flat_top: false,
         }
     }
 
@@ -36,15 +39,22 @@ impl Squircle {
         self
     }
 
+    /// Keeps the top corners sharp (flush with the top of the screen).
+    pub fn with_flat_top(mut self, flat_top: bool) -> Self {
+        self.flat_top = flat_top;
+        self
+    }
+
     /// Is `p` inside (or on) the outline?
     pub fn contains(&self, p: Pos2) -> bool {
         let r = self.radius;
         let half = self.rect.size() * 0.5;
-        let d = (p - self.rect.center()).abs();
+        let center = self.rect.center();
+        let d = (p - center).abs();
         if d.x > half.x || d.y > half.y {
             return false;
         }
-        if r <= 0.0 {
+        if r <= 0.0 || (self.flat_top && p.y <= center.y) {
             return true;
         }
         // Distance into the corner zone, normalized by the radius.
@@ -65,22 +75,25 @@ impl Squircle {
         pts.clear();
         let r = self.radius;
         let Rect { min, max } = self.rect;
-        // Corner centers and the quadrant each corner sweeps.
         // Corner centers in clockwise order (screen space, y down), each with
         // the start angle of its quarter sweep.
         let corners = [
-            (pos2(max.x - r, min.y + r), -90.0_f32), // top-right
-            (pos2(max.x - r, max.y - r), 0.0),       // bottom-right
-            (pos2(min.x + r, max.y - r), 90.0),      // bottom-left
-            (pos2(min.x + r, min.y + r), 180.0),     // top-left
+            (pos2(max.x - r, min.y + r), -90.0_f32, self.flat_top, pos2(max.x, min.y)), // top-right
+            (pos2(max.x - r, max.y - r), 0.0, false, pos2(max.x, max.y)),               // bottom-right
+            (pos2(min.x + r, max.y - r), 90.0, false, pos2(min.x, max.y)),              // bottom-left
+            (pos2(min.x + r, min.y + r), 180.0, self.flat_top, pos2(min.x, min.y)),     // top-left
         ];
         let e = 2.0 / self.exponent;
         let shape = |v: f32| v.signum() * v.abs().powf(e);
-        for (c, start) in corners {
-            for s in 0..=CORNER_SEGMENTS {
-                let deg = start + 90.0 * s as f32 / CORNER_SEGMENTS as f32;
-                let (sin, cos) = deg.to_radians().sin_cos();
-                pts.push(c + vec2(shape(cos), shape(sin)) * r);
+        for (c, start, sharp, corner_pt) in corners {
+            if sharp {
+                pts.push(corner_pt);
+            } else {
+                for s in 0..=CORNER_SEGMENTS {
+                    let deg = start + 90.0 * s as f32 / CORNER_SEGMENTS as f32;
+                    let (sin, cos) = deg.to_radians().sin_cos();
+                    pts.push(c + vec2(shape(cos), shape(sin)) * r);
+                }
             }
         }
     }

@@ -16,8 +16,8 @@ use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
-const LATEST_URL: &str = "https://api.github.com/repos/Geguchh024/nook/releases/latest";
-pub const RELEASES_PAGE: &str = "https://github.com/Geguchh024/nook/releases/latest";
+const LATEST_URL: &str = "https://api.github.com/repos/keera249/nook-enhanced/releases/latest";
+pub const RELEASES_PAGE: &str = "https://github.com/keera249/nook-enhanced/releases/latest";
 const FIRST_CHECK: Duration = Duration::from_secs(20);
 const CHECK_EVERY: Duration = Duration::from_secs(6 * 60 * 60);
 pub const CURRENT: &str = env!("CARGO_PKG_VERSION");
@@ -72,17 +72,10 @@ pub struct Updater {
 }
 
 impl Updater {
-    /// Starts the checker thread. With `auto` off it only checks when asked.
-    pub fn start(ctx: egui::Context, auto: bool) -> Self {
+    /// Disabled in Nook Enhanced Edition: completely decoupled from upstream.
+    pub fn start(_ctx: egui::Context, _auto: bool) -> Self {
         let status = Arc::new(Mutex::new(Status::Idle));
-        let (tx, rx) = unbounded();
-        let shared = status.clone();
-        let spawned = std::thread::Builder::new()
-            .name("nook-update".into())
-            .spawn(move || run(rx, shared, ctx, auto));
-        if let Err(e) = spawned {
-            tracing::warn!("spawning update thread: {e}");
-        }
+        let (tx, _rx) = unbounded();
         Self { status, tx }
     }
 
@@ -90,22 +83,9 @@ impl Updater {
         self.status.lock().map(|s| s.clone()).unwrap_or_default()
     }
 
-    pub fn check_now(&self) {
-        let _ = self.tx.send(Cmd::Check);
-    }
+    pub fn check_now(&self) {}
 
-    /// Downloads and runs the offered release. A copy of Nook that Setup
-    /// did not install (a dev build, an unzipped exe) can't be updated in
-    /// place, so the release page opens instead.
-    pub fn install(&self) {
-        if installed_dir().is_none() {
-            if let Err(e) = nook_platform::shell::open(RELEASES_PAGE) {
-                tracing::warn!("opening the release page: {e}");
-            }
-            return;
-        }
-        let _ = self.tx.send(Cmd::Install);
-    }
+    pub fn install(&self) {}
 }
 
 fn run(rx: Receiver<Cmd>, status: Arc<Mutex<Status>>, ctx: egui::Context, auto: bool) {
@@ -405,65 +385,13 @@ pub struct Chip {
 /// download progress once started. Draws nothing (and returns `None`)
 /// when there is no update to offer.
 pub fn chip(
-    ui: &mut egui::Ui,
-    pos: egui::Pos2,
-    align: egui::Align2,
-    status: &Status,
-    theme: &Theme,
+    _ui: &mut egui::Ui,
+    _pos: egui::Pos2,
+    _align: egui::Align2,
+    _status: &Status,
+    _theme: &Theme,
 ) -> Option<Chip> {
-    use egui::{Align2, Color32, Rect, Sense, vec2};
-    let (label, progress) = match status {
-        Status::Available(r) => (format!("Update to {}", r.version), None),
-        Status::Downloading { progress, .. } => (
-            format!("Downloading {}%", (progress * 100.0).round()),
-            Some(*progress),
-        ),
-        Status::Installing => ("Installing…".to_owned(), Some(1.0)),
-        _ => return None,
-    };
-    let font = Theme::font_semibold(SIZE_LABEL);
-    let text_w = ui
-        .painter()
-        .layout_no_wrap(label.clone(), font.clone(), Color32::WHITE)
-        .size()
-        .x;
-    let rect = align.anchor_size(pos, vec2(text_w + 34.0, 20.0));
-    let center = rect.center();
-    let resp = ui.interact(rect, egui::Id::new("nook-update-chip"), Sense::click());
-    let hover = nook_ui::anim::tween(ui.ctx(), resp.id.with("h"), resp.hovered(), 0.12);
-    let painter = ui.painter();
-    let fill = mix(theme.accent, Color32::WHITE, 0.12 * hover);
-    match progress {
-        None => {
-            painter.rect_filled(rect, 10.0, fill);
-        }
-        Some(p) => {
-            painter.rect_filled(rect, 10.0, with_alpha(theme.accent, 0.35));
-            let done = Rect::from_min_size(rect.min, vec2(rect.width() * p, rect.height()));
-            painter.with_clip_rect(done).rect_filled(rect, 10.0, fill);
-        }
-    }
-    nook_ui::paint::icon(
-        painter,
-        egui::pos2(rect.min.x + 13.0, center.y),
-        nook_ui::icons::ARROW_CIRCLE_UP,
-        12.0,
-        Color32::WHITE,
-        true,
-    );
-    painter.text(
-        egui::pos2(rect.min.x + 23.0, center.y),
-        Align2::LEFT_CENTER,
-        label,
-        font,
-        Color32::WHITE,
-    );
-    if matches!(status, Status::Downloading { .. }) {
-        ui.ctx().request_repaint_after(Duration::from_millis(100));
-    }
-    let clicked = matches!(status, Status::Available(_))
-        && resp.on_hover_text("Download and install").clicked();
-    Some(Chip { rect, clicked })
+    None
 }
 
 #[cfg(test)]
