@@ -161,13 +161,13 @@ pub fn liquid_sheen(
 
         // Meniscus specular arc
         let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
-        let meniscus = Squircle::new(sheen_rect, (r - 1.0).max(2.0));
+        let meniscus = Squircle::new(sheen_rect, (r - 1.0).max(2.0)).with_flat_top(shape.flat_top);
         fill_gradient(painter, &meniscus.outline(), highlight_top, highlight_bot);
 
         // Sharp specular reflex line along the top curve
         let x0 = rect.min.x + r * 0.6;
         let x1 = rect.max.x - r * 0.6;
-        if x1 > x0 {
+        if x1 > x0 + 10.0 {
             let mut mesh = Mesh::default();
             let y = rect.min.y + 1.2;
             let mid_x = 0.5 * (x0 + x1);
@@ -189,7 +189,7 @@ pub fn liquid_sheen(
             pos2(rect.min.x + r, rect.max.y - 3.0),
             pos2(rect.max.x - r, rect.max.y - 1.0),
         );
-        if bounce_rect.width() > 0.0 {
+        if bounce_rect.width() > 0.0 && bounce_rect.height() > 0.0 {
             painter.rect_filled(
                 bounce_rect,
                 1.0,
@@ -214,13 +214,15 @@ pub fn liquid_sheen(
         let bot_c = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
 
         let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + sheen_h));
-        let sheen_shape = Squircle::new(sheen_rect, r);
+        let sheen_shape = Squircle::new(sheen_rect, r).with_flat_top(shape.flat_top);
         fill_gradient(painter, &sheen_shape.outline(), top_c, bot_c);
 
         // Inner optical caustic refraction rim (inset 1.2px)
         let inner_rect = rect.shrink(1.2);
         if inner_rect.width() > 0.0 && inner_rect.height() > 0.0 {
-            let inner_shape = Squircle::new(inner_rect, (r - 1.2).max(4.0)).with_exponent(shape.exponent);
+            let inner_shape = Squircle::new(inner_rect, (r - 1.2).max(4.0))
+                .with_exponent(shape.exponent)
+                .with_flat_top(shape.flat_top);
             let caustic_c = if theme.dark {
                 Color32::from_rgba_unmultiplied(255, 255, 255, (22.0 * p_alpha) as u8)
             } else {
@@ -236,19 +238,19 @@ pub fn liquid_sheen(
         let shimmer_x_t = (time * 0.5).sin() as f32 * 0.5 + 0.5;
         let x0 = rect.min.x + r;
         let x1 = rect.max.x - r;
-        if x1 > x0 {
+        if x1 > x0 + 40.0 {
             let span = x1 - x0;
             let center_x = x0 + span * shimmer_x_t;
             let width = (span * 0.3).max(30.0);
             let s_min = (center_x - width * 0.5).max(x0);
             let s_max = (center_x + width * 0.5).min(x1);
-            if s_max > s_min {
+            if s_max > s_min + 4.0 && center_x > s_min && center_x < s_max {
                 let wave_c = Color32::from_rgba_unmultiplied(255, 255, 255, (45.0 * p_alpha) as u8);
                 let y = rect.min.y + 0.8;
                 let mut mesh = Mesh::default();
                 for (x, c) in [
                     (s_min, Color32::TRANSPARENT),
-                    (center_x.clamp(s_min, s_max), wave_c),
+                    (center_x, wave_c),
                     (s_max, Color32::TRANSPARENT),
                 ] {
                     mesh.colored_vertex(pos2(x, y), c);
