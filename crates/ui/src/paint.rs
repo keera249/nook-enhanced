@@ -197,10 +197,9 @@ pub fn liquid_sheen(
             // Chromatic / accent dispersion fringe directly underneath specular line
             let mut prism_mesh = Mesh::default();
             let py = y + 1.0;
-            let prism_c = with_alpha(
-                mix(Color32::from_rgb(180, 220, 255), theme.accent, 0.22),
-                (50.0 * p_alpha) as u8,
-            );
+            let prism_base = mix(Color32::from_rgb(180, 220, 255), theme.accent, 0.22);
+            let [pr, pg, pb, _] = prism_base.to_srgba_unmultiplied();
+            let prism_c = Color32::from_rgba_unmultiplied(pr, pg, pb, (50.0 * p_alpha) as u8);
             for (x, c) in [(x0, c_edge), (mid_x, prism_c), (x1, c_edge)] {
                 prism_mesh.colored_vertex(pos2(x, py), c);
                 prism_mesh.colored_vertex(pos2(x, py + 0.8), c);
@@ -276,10 +275,9 @@ pub fn liquid_sheen(
                 .with_exponent(shape.exponent)
                 .with_flat_top(shape.flat_top);
             let caustic_base = mix(Color32::WHITE, theme.accent, 0.16);
-            let caustic_c = with_alpha(
-                caustic_base,
-                (if theme.dark { 28.0 } else { 60.0 } * p_alpha) as u8,
-            );
+            let [cr, cg, cb, _] = caustic_base.to_srgba_unmultiplied();
+            let caustic_a = (if theme.dark { 28.0 } else { 60.0 } * p_alpha) as u8;
+            let caustic_c = Color32::from_rgba_unmultiplied(cr, cg, cb, caustic_a);
             painter.add(PathShape::closed_line(
                 inner_shape.outline(),
                 PathStroke::new(1.0, caustic_c),
@@ -383,14 +381,16 @@ pub fn tile_liquid_sheen(painter: &Painter, rect: Rect, theme: &Theme, lift: f32
     if inner.width() > 0.0 && inner.height() > 0.0 {
         let inner_shape = Squircle::new(inner, (r - 1.0).max(2.0));
         let bevel_base = mix(Color32::WHITE, theme.accent, lift * 0.22);
+        let [br, bg, bb, _] = bevel_base.to_srgba_unmultiplied();
         let bevel_a = if theme.dark {
             (24.0 + lift * 32.0).min(80.0) as u8
         } else {
             (65.0 + lift * 35.0).min(140.0) as u8
         };
+        let bevel_c = Color32::from_rgba_unmultiplied(br, bg, bb, bevel_a);
         painter.add(PathShape::closed_line(
             inner_shape.outline(),
-            PathStroke::new(0.9, with_alpha(bevel_base, bevel_a)),
+            PathStroke::new(0.9, bevel_c),
         ));
     }
 
