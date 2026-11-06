@@ -1,10 +1,9 @@
-//! Arabic text shaping and visual Bidirectional (BiDi) reordering for egui.
+//! Arabic text shaping for egui and Nook.
 //!
-//! Egui by default does not perform OpenType GSUB cursive shaping or BiDi layout.
+//! Egui by default does not perform OpenType GSUB cursive shaping.
 //! This module converts Arabic Unicode runs (U+0600..U+06FF and presentation forms)
 //! into contextual Presentation Forms-B (Isolated, Initial, Medial, Final, and Lam-Alif
-//! ligatures) and performs visual BiDi reordering so that Arabic text displays
-//! seamlessly connected and in correct right-to-left visual order.
+//! ligatures) so that Arabic script renders seamlessly connected, cursive, and legible.
 
 /// Checks whether a character belongs to the Arabic script or presentation forms.
 pub fn is_arabic(c: char) -> bool {
@@ -306,48 +305,13 @@ fn shape_arabic_run(text: &str) -> Vec<String> {
     shaped_units
 }
 
-/// Mirrors punctuation for RTL context.
-fn mirror_char(c: char) -> char {
-    match c {
-        '(' => ')',
-        ')' => '(',
-        '[' => ']',
-        ']' => '[',
-        '{' => '}',
-        '}' => '{',
-        '<' => '>',
-        '>' => '<',
-        '«' => '»',
-        '»' => '«',
-        _ => c,
-    }
-}
-
-#[derive(PartialEq, Eq, Clone, Copy, Debug)]
-enum Direction {
-    Rtl,
-    Ltr,
-    Neutral,
-}
-
-fn char_dir(c: char) -> Direction {
-    if is_arabic(c) {
-        Direction::Rtl
-    } else if c.is_alphabetic() || c.is_ascii_digit() {
-        Direction::Ltr
-    } else {
-        Direction::Neutral
-    }
-}
-
-/// Shapes and performs visual BiDi reordering on an entire string for LTR rendering engines.
-/// English words and numbers stay in natural order; Arabic runs are shaped and visually reversed.
+/// Shapes Arabic characters within text into connected Presentation Forms-B.
+/// Non-Arabic text (English, digits, symbols) remains completely untouched.
 pub fn shape_bidi(text: &str) -> String {
     if !contains_arabic(text) {
         return text.to_owned();
     }
 
-    // Process line-by-line to preserve linebreaks
     let mut out = String::with_capacity(text.len() * 2);
     let mut lines = text.split('\n').peekable();
 
@@ -360,90 +324,38 @@ pub fn shape_bidi(text: &str) -> String {
             continue;
         }
 
-        // Determine dominant line direction: look at first strong letter
-        let is_line_rtl = line
-            .chars()
-            .find_map(|c| match char_dir(c) {
-                Direction::Rtl => Some(true),
-                Direction::Ltr => Some(false),
-                Direction::Neutral => None,
-            })
-            .unwrap_or(true);
-
-        // Segment the line into runs of RTL vs LTR/Neutral
-        #[derive(Debug)]
-        struct Run {
-            is_rtl: bool,
-            text: String,
-        }
-
-        let mut runs: Vec<Run> = Vec::new();
-        let mut cur_rtl = false;
+        let mut cur_arabic = false;
         let mut cur_buf = String::new();
 
+        let flush_buf = |buf: &mut String, is_ar: bool, target: &mut String| {
+            if buf.is_empty() {
+                return;
+            }
+            if is_ar {
+                let units = shape_arabic_run(buf);
+                for u in units {
+                    target.push_str(&u);
+                }
+            } else {
+                target.push_str(buf);
+            }
+            buf.clear();
+        };
+
         for c in line.chars() {
-            let dir = char_dir(c);
-            let rtl = match dir {
-                Direction::Rtl => true,
-                Direction::Ltr => false,
-                Direction::Neutral => {
-                    if cur_buf.is_empty() {
-                        is_line_rtl
-                    } else {
-                        cur_rtl
-                    }
-                }
-            };
-
+            let is_ar = is_arabic(c) || is_tashkeel(c);
             if cur_buf.is_empty() {
-                cur_rtl = rtl;
+                cur_arabic = is_ar;
                 cur_buf.push(c);
-            } else if rtl == cur_rtl {
+            } else if is_ar == cur_arabic {
                 cur_buf.push(c);
             } else {
-                runs.push(Run {
-                    is_rtl: cur_rtl,
-                    text: std::mem::take(&mut cur_buf),
-                });
-                cur_rtl = rtl;
+                flush_buf(&mut cur_buf, cur_arabic, &mut out);
+                cur_arabic = is_ar;
                 cur_buf.push(c);
             }
         }
-
-        if !cur_buf.is_empty() {
-            runs.push(Run {
-                is_rtl: cur_rtl,
-                text: cur_buf,
-            });
-        }
-
-        // Process each run: shape Arabic runs and reverse their visual units
-        let mut processed_runs: Vec<String> = Vec::with_capacity(runs.len());
-        for run in runs {
-            if run.is_rtl {
-                let units = shape_arabic_run(&run.text);
-                // Reverse units for visual LTR painting and mirror brackets
-                let mut reversed = String::with_capacity(run.text.len() * 2);
-                for unit in units.into_iter().rev() {
-                    for ch in unit.chars() {
-                        reversed.push(mirror_char(ch));
-                    }
-                }
-                processed_runs.push(reversed);
-            } else {
-                processed_runs.push(run.text);
-            }
-        }
-
-        // If the entire line is predominantly RTL (starts with Arabic), reverse run order
-        // so that RTL segments appear on the right and trailing numbers/words on the left
-        if is_line_rtl {
-            processed_runs.reverse();
-        }
-
-        for r in processed_runs {
-            out.push_str(&r);
-        }
+        flush_buf(&mut cur_buf, cur_arabic, &mut out);
 
         if lines.peek().is_some() {
             out.push('\n');
@@ -462,11 +374,12 @@ mod tests {
         let input = "سبحان";
         let shaped = shape_bidi(input);
         let chars: Vec<char> = shaped.chars().collect();
-        assert_eq!(chars[0], '\u{FEE5}'); // Noon Isolated
-        assert_eq!(chars[1], '\u{FE8E}'); // Alef Final
+        // Logical forward order: Seen Initial on left, connecting to Beh Medial, etc.
+        assert_eq!(chars[0], '\u{FEB3}'); // Seen Initial
+        assert_eq!(chars[1], '\u{FE92}'); // Beh Medial
         assert_eq!(chars[2], '\u{FEA4}'); // Hah Medial
-        assert_eq!(chars[3], '\u{FE92}'); // Beh Medial
-        assert_eq!(chars[4], '\u{FEB3}'); // Seen Initial
+        assert_eq!(chars[3], '\u{FE8E}'); // Alef Final
+        assert_eq!(chars[4], '\u{FEE5}'); // Noon Isolated
     }
 
     #[test]
@@ -475,7 +388,7 @@ mod tests {
         let shaped = shape_bidi(input);
         let chars: Vec<char> = shaped.chars().collect();
         assert_eq!(chars.len(), 1);
-        assert_eq!(chars[0], '\u{FEFB}');
+        assert_eq!(chars[0], '\u{FEFB}'); // Lam-Alif Isolated
     }
 
     #[test]
@@ -492,8 +405,8 @@ mod tests {
         assert!(shaped.starts_with("Dhikr: "));
         let rest = &shaped["Dhikr: ".len()..];
         let chars: Vec<char> = rest.chars().collect();
-        assert_eq!(chars[0], '\u{FEE5}'); // Noon Isolated
-        assert_eq!(chars[4], '\u{FEB3}'); // Seen Initial
+        assert_eq!(chars[0], '\u{FEB3}'); // Seen Initial
+        assert_eq!(chars[4], '\u{FEE5}'); // Noon Isolated
     }
 
     #[test]
@@ -501,10 +414,10 @@ mod tests {
         let input = "الله";
         let shaped = shape_bidi(input);
         let chars: Vec<char> = shaped.chars().collect();
-        assert_eq!(chars[0], '\u{FEEA}'); // Heh Final
-        assert_eq!(chars[1], '\u{FEE0}'); // Lam Medial
-        assert_eq!(chars[2], '\u{FEDF}'); // Lam Initial
-        assert_eq!(chars[3], '\u{FE8D}'); // Alef Isolated
+        assert_eq!(chars[0], '\u{FE8D}'); // Alef Isolated
+        assert_eq!(chars[1], '\u{FEDF}'); // Lam Initial
+        assert_eq!(chars[2], '\u{FEE0}'); // Lam Medial
+        assert_eq!(chars[3], '\u{FEEA}'); // Heh Final
     }
 
     #[test]
@@ -512,13 +425,6 @@ mod tests {
         let input = "صلاة الفجر 05:12";
         let shaped = shape_bidi(input);
         assert!(shaped.contains("05:12"));
-    }
-
-    #[test]
-    fn brackets_mirror() {
-        let input = "(سبحان)";
-        let shaped = shape_bidi(input);
-        // Opening '(' was on right in Arabic reading, so in visual LTR it should enclose properly
-        assert!(shaped.starts_with('(') && shaped.ends_with(')'));
+        assert!(shaped.contains('\u{FEAE}')); // Reh Final in الفجر
     }
 }
