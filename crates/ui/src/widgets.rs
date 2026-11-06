@@ -382,4 +382,7 @@ pub fn card(painter: &egui::Painter, rect: egui::Rect, theme: &Theme) {
         outline,
         egui::epaint::PathStroke::new(1.0, theme.tile_rim),
     ));
+    if theme.liquid_glass {
+        paint::tile_liquid_sheen(painter, rect, theme, 0.0);
+    }
 }

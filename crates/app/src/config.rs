@@ -34,6 +34,9 @@ pub enum Material {
     /// Blurred acrylic backdrop where supported.
     #[default]
     Acrylic,
+    /// Liquid Glass: High-transparency fluid refractive glass with caustic specular highlights.
+    #[serde(rename = "liquid_glass", alias = "liquid", alias = "liquidglass")]
+    LiquidGlass,
     /// Opaque glass, no backdrop blur.
     Solid,
 }
@@ -197,6 +200,7 @@ impl Config {
             tint: parse_hex(&self.background_hex),
             grain: self.grain.min(100) as f32 / 100.0,
             grain_px: self.grain_size.pixels(),
+            liquid_glass: self.material == Material::LiquidGlass,
         }
     }
 

@@ -407,6 +407,7 @@ fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, _status: &Status, _ou
 fn customize_summary(cfg: &Config) -> String {
     let material = match cfg.material {
         Material::Acrylic => format!("Glass {}%", cfg.glass_opacity),
+        Material::LiquidGlass => format!("Liquid Glass {}%", cfg.glass_opacity),
         Material::Solid => "Solid".to_owned(),
     };
     let tint = if parse_hex(&cfg.background_hex).is_some() {
@@ -453,12 +454,14 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
     let mut lui = column(ui, left);
     let mut mat_idx = match cfg.material {
         Material::Acrylic => 0,
-        Material::Solid => 1,
+        Material::LiquidGlass => 1,
+        Material::Solid => 2,
     };
     if row(&mut lui, "Material", theme, |ui| {
-        widgets::segmented(ui, &["Glass", "Solid"], &mut mat_idx, theme)
+        widgets::segmented(ui, &["Glass", "Liquid Glass", "Solid"], &mut mat_idx, theme)
+            .on_hover_text("Glass: Standard acrylic blur\nLiquid Glass: Fluid refractive glass with glossy specular reflections & crystal caustics\nSolid: Opaque dark panel")
     }) {
-        cfg.material = [Material::Acrylic, Material::Solid][mat_idx];
+        cfg.material = [Material::Acrylic, Material::LiquidGlass, Material::Solid][mat_idx];
         out.changed = true;
     }
     let mut bg_idx = match parse_hex(&cfg.background_hex) {
@@ -472,7 +475,7 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
         cfg.background_hex = BACKGROUNDS[i].map(to_hex).unwrap_or_default();
         out.changed = true;
     }
-    let glass = cfg.material == Material::Acrylic;
+    let glass = cfg.material == Material::Acrylic || cfg.material == Material::LiquidGlass;
     // With Windows "Transparency effects" off there is no blur to see
     // through, so the glass is drawn opaque and opacity has no effect. Only
     // read while this card is open.

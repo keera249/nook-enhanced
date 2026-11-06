@@ -40,6 +40,8 @@ pub struct Look {
     pub grain: f32,
     /// Size of one grain speck in physical pixels.
     pub grain_px: f32,
+    /// Liquid Glass mode: high-transparency fluid refractive glass with caustic specular highlights.
+    pub liquid_glass: bool,
 }
 
 impl Default for Look {
@@ -49,6 +51,7 @@ impl Default for Look {
             tint: None,
             grain: 0.35,
             grain_px: 1.0,
+            liquid_glass: false,
         }
     }
 }
@@ -63,6 +66,7 @@ const GRAIN_MAX_LIGHT: f32 = 16.0;
 pub struct Theme {
     pub dark: bool,
     pub accent: Color32,
+    pub liquid_glass: bool,
     /// Glass fill, top and bottom of the vertical gradient.
     pub glass_top: Color32,
     pub glass_bottom: Color32,
@@ -98,8 +102,13 @@ impl Theme {
 
     /// [`Theme::new`] with the user's [`Look`] applied.
     pub fn styled(dark: bool, accent: Color32, translucent: bool, look: &Look) -> Self {
+        let liquid = look.liquid_glass;
         let glass_alpha = if translucent {
-            look.glass_opacity.clamp(0.2, 1.0)
+            if liquid {
+                (look.glass_opacity * 0.72).clamp(0.18, 0.88)
+            } else {
+                look.glass_opacity.clamp(0.2, 1.0)
+            }
         } else {
             0.96
         };
@@ -111,49 +120,129 @@ impl Theme {
             Some(t) => mix(base, t, amount),
             None => base,
         };
-        let ink_alpha = if translucent { 0.90 } else { 1.0 };
-        let ink = Ink {
-            pill_top: with_alpha(Color32::from_rgb(24, 24, 28), ink_alpha),
-            pill_bottom: with_alpha(Color32::from_rgb(6, 6, 8), ink_alpha),
-            pill_rim: Color32::from_rgba_unmultiplied(255, 255, 255, 22),
-            pill_highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 34),
-            pill_text: Color32::from_rgb(244, 244, 246),
-            pill_text_dim: Color32::from_rgb(150, 150, 160),
+        let ink_alpha = if translucent {
+            if liquid { 0.82 } else { 0.90 }
+        } else {
+            1.0
+        };
+        let ink = if liquid {
+            Ink {
+                pill_top: with_alpha(Color32::from_rgb(30, 32, 40), ink_alpha),
+                pill_bottom: with_alpha(Color32::from_rgb(8, 9, 14), ink_alpha),
+                pill_rim: Color32::from_rgba_unmultiplied(255, 255, 255, 52),
+                pill_highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 120),
+                pill_text: Color32::from_rgb(248, 248, 252),
+                pill_text_dim: Color32::from_rgb(165, 170, 185),
+            }
+        } else {
+            Ink {
+                pill_top: with_alpha(Color32::from_rgb(24, 24, 28), ink_alpha),
+                pill_bottom: with_alpha(Color32::from_rgb(6, 6, 8), ink_alpha),
+                pill_rim: Color32::from_rgba_unmultiplied(255, 255, 255, 22),
+                pill_highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 34),
+                pill_text: Color32::from_rgb(244, 244, 246),
+                pill_text_dim: Color32::from_rgb(150, 150, 160),
+            }
         };
         if dark {
+            let (glass_top, glass_bottom) = if liquid {
+                (
+                    with_alpha(tinted(Color32::from_rgb(46, 50, 62), 0.35), glass_alpha),
+                    with_alpha(tinted(Color32::from_rgb(10, 12, 18), 0.25), glass_alpha * 0.85),
+                )
+            } else {
+                (
+                    with_alpha(tinted(Color32::from_rgb(34, 34, 40), 0.30), glass_alpha),
+                    with_alpha(tinted(Color32::from_rgb(18, 18, 22), 0.20), glass_alpha),
+                )
+            };
+            let (rim, highlight) = if liquid {
+                (
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 48),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 190),
+                )
+            } else {
+                (
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 110),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 46),
+                )
+            };
+            let (tile_top, tile_bottom, tile_rim) = if liquid {
+                (
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 36),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 12),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 30),
+                )
+            } else {
+                (
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 18),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 8),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 14),
+                )
+            };
             Self {
                 dark,
                 accent,
-                glass_top: with_alpha(tinted(Color32::from_rgb(34, 34, 40), 0.30), glass_alpha),
-                glass_bottom: with_alpha(tinted(Color32::from_rgb(18, 18, 22), 0.20), glass_alpha),
-                rim: Color32::from_rgba_unmultiplied(0, 0, 0, 110),
-                highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 46),
+                liquid_glass: liquid,
+                glass_top,
+                glass_bottom,
+                rim,
+                highlight,
                 noise_alpha: (grain * GRAIN_MAX_DARK).round() as u8,
                 grain_px,
-                tile_top: Color32::from_rgba_unmultiplied(255, 255, 255, 18),
-                tile_bottom: Color32::from_rgba_unmultiplied(255, 255, 255, 8),
-                tile_rim: Color32::from_rgba_unmultiplied(255, 255, 255, 14),
+                tile_top,
+                tile_bottom,
+                tile_rim,
                 text: Color32::from_rgb(242, 242, 245),
                 text_dim: Color32::from_rgb(168, 168, 178),
                 text_faint: Color32::from_rgb(110, 110, 120),
                 ..ink.into_theme()
             }
         } else {
+            let (glass_top, glass_bottom) = if liquid {
+                (
+                    with_alpha(tinted(Color32::from_rgb(255, 255, 255), 0.20), glass_alpha),
+                    with_alpha(tinted(Color32::from_rgb(228, 230, 238), 0.28), glass_alpha),
+                )
+            } else {
+                (
+                    with_alpha(tinted(Color32::from_rgb(252, 252, 253), 0.14), glass_alpha),
+                    with_alpha(
+                        tinted(Color32::from_rgb(236, 236, 240), 0.20),
+                        glass_alpha,
+                    ),
+                )
+            };
+            let (tile_top, tile_bottom, tile_rim) = if liquid {
+                (
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 180),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 110),
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 18),
+                )
+            } else {
+                (
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 150),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 90),
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 14),
+                )
+            };
             Self {
                 dark,
                 accent,
-                glass_top: with_alpha(tinted(Color32::from_rgb(252, 252, 253), 0.14), glass_alpha),
-                glass_bottom: with_alpha(
-                    tinted(Color32::from_rgb(236, 236, 240), 0.20),
-                    glass_alpha,
-                ),
-                rim: Color32::from_rgba_unmultiplied(0, 0, 0, 40),
-                highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 200),
+                liquid_glass: liquid,
+                glass_top,
+                glass_bottom,
+                rim: if liquid {
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 90)
+                } else {
+                    Color32::from_rgba_unmultiplied(0, 0, 0, 40)
+                },
+                highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 240),
                 noise_alpha: (grain * GRAIN_MAX_LIGHT).round() as u8,
                 grain_px,
-                tile_top: Color32::from_rgba_unmultiplied(255, 255, 255, 150),
-                tile_bottom: Color32::from_rgba_unmultiplied(255, 255, 255, 90),
-                tile_rim: Color32::from_rgba_unmultiplied(0, 0, 0, 14),
+                tile_top,
+                tile_bottom,
+                tile_rim,
                 text: Color32::from_rgb(24, 24, 28),
                 text_dim: Color32::from_rgb(92, 92, 104),
                 text_faint: Color32::from_rgb(150, 150, 160),
@@ -229,6 +318,7 @@ impl Ink {
         Theme {
             dark: true,
             accent: z,
+            liquid_glass: false,
             glass_top: z,
             glass_bottom: z,
             rim: z,

@@ -2,10 +2,10 @@
 //! surface (fill + grain + rim + top highlight), glows, icons and rings.
 
 use crate::geometry::Squircle;
-use crate::theme::{FAMILY_ICON_FILL, FAMILY_ICON_REGULAR, Theme, with_alpha};
+use crate::theme::{FAMILY_ICON_FILL, FAMILY_ICON_REGULAR, TILE_RADIUS, Theme, with_alpha};
 use egui::epaint::{Mesh, PathShape, PathStroke, Vertex};
 use egui::{
-    Align2, Color32, ColorImage, Context, FontFamily, FontId, Painter, Pos2, Shape, Stroke,
+    Align2, Color32, ColorImage, Context, FontFamily, FontId, Painter, Pos2, Rect, Shape, Stroke,
     TextureHandle, TextureId, TextureOptions, TextureWrapMode, pos2, vec2,
 };
 
@@ -132,6 +132,174 @@ pub fn top_highlight(painter: &Painter, shape: &Squircle, color: Color32) {
     mesh.add_triangle(2, 3, 4);
     mesh.add_triangle(3, 4, 5);
     painter.add(Shape::mesh(mesh));
+}
+
+/// Specular reflections, refractive inner caustic bevel, and fluid surface lens curve
+/// for both the expanded panel and the collapsed Dynamic Island pill.
+pub fn liquid_sheen(
+    painter: &Painter,
+    shape: &Squircle,
+    theme: &Theme,
+    opacity: f32,
+    progress: f32,
+    time: f64,
+) {
+    if opacity <= 0.01 {
+        return;
+    }
+    let rect = shape.rect;
+    let r = shape.radius;
+    let pill_stage = (1.0 - progress / 0.35).clamp(0.0, 1.0);
+
+    // 1. In the collapsed pill state (Dynamic Island):
+    // Polished liquid obsidian meniscus on the top half with sharp specular reflex.
+    if pill_stage > 0.01 {
+        let p_alpha = pill_stage * opacity;
+        let h = (rect.height() * 0.48).max(4.0);
+        let highlight_top = Color32::from_rgba_unmultiplied(255, 255, 255, (75.0 * p_alpha) as u8);
+        let highlight_bot = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
+
+        // Meniscus specular arc
+        let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
+        let meniscus = Squircle::new(sheen_rect, (r - 1.0).max(2.0));
+        fill_gradient(painter, &meniscus.outline(), highlight_top, highlight_bot);
+
+        // Sharp specular reflex line along the top curve
+        let x0 = rect.min.x + r * 0.6;
+        let x1 = rect.max.x - r * 0.6;
+        if x1 > x0 {
+            let mut mesh = Mesh::default();
+            let y = rect.min.y + 1.2;
+            let mid_x = 0.5 * (x0 + x1);
+            let c_center = Color32::from_rgba_unmultiplied(255, 255, 255, (140.0 * p_alpha) as u8);
+            let c_edge = Color32::TRANSPARENT;
+            for (x, c) in [(x0, c_edge), (mid_x, c_center), (x1, c_edge)] {
+                mesh.colored_vertex(pos2(x, y), c);
+                mesh.colored_vertex(pos2(x, y + 1.0), c);
+            }
+            mesh.add_triangle(0, 1, 2);
+            mesh.add_triangle(1, 2, 3);
+            mesh.add_triangle(2, 3, 4);
+            mesh.add_triangle(3, 4, 5);
+            painter.add(Shape::mesh(mesh));
+        }
+
+        // Subtle bottom bounce reflection (liquid light gathering)
+        let bounce_rect = Rect::from_min_max(
+            pos2(rect.min.x + r, rect.max.y - 3.0),
+            pos2(rect.max.x - r, rect.max.y - 1.0),
+        );
+        if bounce_rect.width() > 0.0 {
+            painter.rect_filled(
+                bounce_rect,
+                1.0,
+                Color32::from_rgba_unmultiplied(255, 255, 255, (25.0 * p_alpha) as u8),
+            );
+        }
+    }
+
+    // 2. In the expanding/expanded panel state:
+    // Fluid surface lens curve, caustic inner edge, and gentle specular wave.
+    let panel_stage = (progress / 0.35).clamp(0.0, 1.0);
+    if panel_stage > 0.01 {
+        let p_alpha = panel_stage * opacity;
+
+        // Subtle liquid sheen over the upper 38% of the panel
+        let sheen_h = (rect.height() * 0.38).min(180.0);
+        let top_c = if theme.dark {
+            Color32::from_rgba_unmultiplied(255, 255, 255, (28.0 * p_alpha) as u8)
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, (70.0 * p_alpha) as u8)
+        };
+        let bot_c = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
+
+        let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + sheen_h));
+        let sheen_shape = Squircle::new(sheen_rect, r);
+        fill_gradient(painter, &sheen_shape.outline(), top_c, bot_c);
+
+        // Inner optical caustic refraction rim (inset 1.2px)
+        let inner_rect = rect.shrink(1.2);
+        if inner_rect.width() > 0.0 && inner_rect.height() > 0.0 {
+            let inner_shape = Squircle::new(inner_rect, (r - 1.2).max(4.0)).with_exponent(shape.exponent);
+            let caustic_c = if theme.dark {
+                Color32::from_rgba_unmultiplied(255, 255, 255, (22.0 * p_alpha) as u8)
+            } else {
+                Color32::from_rgba_unmultiplied(255, 255, 255, (55.0 * p_alpha) as u8)
+            };
+            painter.add(PathShape::closed_line(
+                inner_shape.outline(),
+                PathStroke::new(1.0, caustic_c),
+            ));
+        }
+
+        // Fluid shimmering light wave across the top highlight
+        let shimmer_x_t = (time * 0.5).sin() as f32 * 0.5 + 0.5;
+        let x0 = rect.min.x + r;
+        let x1 = rect.max.x - r;
+        if x1 > x0 {
+            let span = x1 - x0;
+            let center_x = x0 + span * shimmer_x_t;
+            let width = (span * 0.3).max(30.0);
+            let s_min = (center_x - width * 0.5).max(x0);
+            let s_max = (center_x + width * 0.5).min(x1);
+            if s_max > s_min {
+                let wave_c = Color32::from_rgba_unmultiplied(255, 255, 255, (45.0 * p_alpha) as u8);
+                let y = rect.min.y + 0.8;
+                let mut mesh = Mesh::default();
+                for (x, c) in [
+                    (s_min, Color32::TRANSPARENT),
+                    (center_x.clamp(s_min, s_max), wave_c),
+                    (s_max, Color32::TRANSPARENT),
+                ] {
+                    mesh.colored_vertex(pos2(x, y), c);
+                    mesh.colored_vertex(pos2(x, y + 1.2), c);
+                }
+                mesh.add_triangle(0, 1, 2);
+                mesh.add_triangle(1, 2, 3);
+                mesh.add_triangle(2, 3, 4);
+                mesh.add_triangle(3, 4, 5);
+                painter.add(Shape::mesh(mesh));
+            }
+        }
+    }
+}
+
+/// Curved liquid glass specular sheen and refractive optical bevel for bento tiles.
+pub fn tile_liquid_sheen(painter: &Painter, rect: Rect, theme: &Theme, lift: f32) {
+    let r = TILE_RADIUS;
+    let h = (rect.height() * 0.44).min(45.0);
+    let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
+    let s = Squircle::new(sheen_rect, (r - 0.5).max(4.0));
+
+    let alpha_boost = 1.0 + lift * 0.5;
+    let top_a = if theme.dark {
+        (34.0 * alpha_boost).min(80.0) as u8
+    } else {
+        (90.0 * alpha_boost).min(160.0) as u8
+    };
+
+    // Top specular gloss
+    fill_gradient(
+        painter,
+        &s.outline(),
+        Color32::from_rgba_unmultiplied(255, 255, 255, top_a),
+        Color32::from_rgba_unmultiplied(255, 255, 255, 0),
+    );
+
+    // Inner optical refractive stroke (1px inset)
+    let inner = rect.shrink(1.0);
+    if inner.width() > 0.0 && inner.height() > 0.0 {
+        let inner_shape = Squircle::new(inner, (r - 1.0).max(2.0));
+        let bevel_c = if theme.dark {
+            Color32::from_rgba_unmultiplied(255, 255, 255, (20.0 + lift * 15.0) as u8)
+        } else {
+            Color32::from_rgba_unmultiplied(255, 255, 255, (60.0 + lift * 25.0) as u8)
+        };
+        painter.add(PathShape::closed_line(
+            inner_shape.outline(),
+            PathStroke::new(0.8, bevel_c),
+        ));
+    }
 }
 
 /// Soft glow: a few expanding, fading squircles under a shape.

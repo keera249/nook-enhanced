@@ -140,6 +140,9 @@ fn tile_glass(painter: &egui::Painter, rect: Rect, theme: &Theme, active: bool, 
         outline,
         egui::epaint::PathStroke::new(1.0, theme.tile_rim),
     ));
+    if theme.liquid_glass {
+        paint::tile_liquid_sheen(painter, rect, theme, lift);
+    }
     paint::top_highlight(painter, &shape, with_alpha(theme.highlight, 0.5));
 }
 

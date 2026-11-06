@@ -330,6 +330,19 @@ impl Shell {
             progress,
             !composited,
         );
+        if theme.liquid_glass {
+            paint::liquid_sheen(
+                &painter,
+                &shape,
+                theme,
+                opacity,
+                progress,
+                now,
+            );
+            if progress > 0.2 && !hidden {
+                ctx.request_repaint_after_secs(0.033);
+            }
+        }
 
         // Collapsed badges fade out as the shell grows.
         let pill_alpha = (1.0 - progress / 0.28).clamp(0.0, 1.0) * opacity;

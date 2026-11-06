@@ -16,13 +16,19 @@ use windows::core::BOOL;
 pub enum Applied {
     /// Shape-clipped blurred backdrop; draw the glass translucent.
     Acrylic,
+    /// Liquid Glass: Fluid refractive backdrop with caustic specular reflections.
+    LiquidGlass,
     /// No backdrop; draw the glass nearly opaque.
     Opaque,
 }
 
 impl Applied {
     pub fn translucent(self) -> bool {
-        matches!(self, Applied::Acrylic)
+        matches!(self, Applied::Acrylic | Applied::LiquidGlass)
+    }
+
+    pub fn is_liquid(self) -> bool {
+        matches!(self, Applied::LiquidGlass)
     }
 }
 

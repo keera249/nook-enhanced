@@ -496,9 +496,14 @@ impl NookApp {
                 }
             }
         }
-        let blur = self.cfg.material == Material::Acrylic && self.sys.transparency;
+        let blur = (self.cfg.material == Material::Acrylic || self.cfg.material == Material::LiquidGlass)
+            && self.sys.transparency;
         self.material = if blur && self.backdrop.is_some() {
-            Applied::Acrylic
+            if self.cfg.material == Material::LiquidGlass {
+                Applied::LiquidGlass
+            } else {
+                Applied::Acrylic
+            }
         } else {
             Applied::Opaque
         };
@@ -516,14 +521,15 @@ impl NookApp {
         let unmult = |c: Color32| theme::with_alpha(c, out.opacity).to_srgba_unmultiplied();
         let rect = out.shape.rect;
         let r = out.shape.radius;
+        let is_liquid = self.material.is_liquid();
         let tint = Tint {
             top: unmult(top),
             bottom: unmult(bottom),
             y0: rect.min.y * ppp,
             y1: rect.max.y * ppp,
-            blur: self.material == Applied::Acrylic,
+            blur: self.material.translucent(),
             rim: unmult(theme.rim_at(out.progress)),
-            rim_width: 2.0 * ppp,
+            rim_width: if is_liquid { 2.5 * ppp } else { 2.0 * ppp },
             highlight: unmult(theme.highlight_at(out.progress)),
             highlight_x0: (rect.min.x + r) * ppp,
             highlight_x1: (rect.max.x - r) * ppp,
