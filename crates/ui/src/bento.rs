@@ -537,7 +537,7 @@ pub fn show(
                         }
                     } else if resp.clicked() && ready {
                         if compact && !is_open {
-                            if tile.module.id().starts_with("plugin:") || tile.module.page_size().is_some() {
+                            if tile.module.id() == "plugin:prayer-times" {
                                 out.clicked = Some(tile.module.id());
                             } else {
                                 expanded = Expanded {

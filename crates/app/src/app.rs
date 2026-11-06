@@ -1253,17 +1253,27 @@ impl eframe::App for NookApp {
             .filter_map(|m| m.collapsed_badge())
             .collect();
         let has_media = badges.iter().any(|b| matches!(b, Badge::Media { .. }));
-        let has_notification = badges.iter().any(|b| match b {
-            Badge::Ring { label, .. } => !label.trim().is_empty(),
-            Badge::Pulse => true,
-            Badge::Glyph { .. } => true,
-            Badge::Media { .. } => false,
-        });
+        let is_notification = |b: &Badge| -> bool {
+            match b {
+                Badge::Ring { label, .. } => {
+                    let t = label.trim();
+                    !t.is_empty()
+                        && (nook_ui::arabic::contains_arabic(t)
+                            || t.starts_with("Azan")
+                            || t.starts_with("Dhikr")
+                            || t.starts_with("Alert"))
+                }
+                Badge::Pulse => true,
+                Badge::Glyph { .. } => true,
+                Badge::Media { .. } => false,
+            }
+        };
+        let has_notification = badges.iter().any(is_notification);
         let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
         let mut notif_extra_w = 0.0f32;
         for b in &badges {
             match b {
-                Badge::Ring { label, .. } if !label.trim().is_empty() => {
+                Badge::Ring { label, .. } if is_notification(b) => {
                     let char_count = label.chars().count();
                     let needed = (char_count as f32 * 8.8 + 125.0) - base_w;
                     if needed > notif_extra_w {
@@ -1294,7 +1304,13 @@ impl eframe::App for NookApp {
         let update_status = self.updater.status();
         let editing = self.editing;
         let page = self.page;
-        let mini_mode = !self.cfg.hide_in_fullscreen && self.cfg.mini_in_fullscreen && full && !has_notification && !has_media;
+        let mini_mode = !self.cfg.hide_in_fullscreen
+            && self.cfg.mini_in_fullscreen
+            && full
+            && !has_notification
+            && !has_media
+            && !is_hovered
+            && !self.shell.state.is_open();
         let (pill_h, pill_r) = if has_notification {
             (36.0, 18.0)
         } else {
