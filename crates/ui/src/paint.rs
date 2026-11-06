@@ -2,7 +2,7 @@
 //! surface (fill + grain + rim + top highlight), glows, icons and rings.
 
 use crate::geometry::Squircle;
-use crate::theme::{FAMILY_ICON_FILL, FAMILY_ICON_REGULAR, TILE_RADIUS, Theme, with_alpha};
+use crate::theme::{FAMILY_ICON_FILL, FAMILY_ICON_REGULAR, TILE_RADIUS, Theme, mix, with_alpha};
 use egui::epaint::{Mesh, PathShape, PathStroke, Vertex};
 use egui::{
     Align2, Color32, ColorImage, Context, FontFamily, FontId, Painter, Pos2, Rect, Shape, Stroke,
@@ -151,27 +151,38 @@ pub fn liquid_sheen(
     let r = shape.radius;
     let pill_stage = (1.0 - progress / 0.35).clamp(0.0, 1.0);
 
-    // 1. In the collapsed pill state (Dynamic Island):
-    // Polished liquid obsidian meniscus on the top half with sharp specular reflex.
+    // 1. In the collapsed Dynamic Island pill:
+    // Polished liquid obsidian meniscus, caustic refraction rim, and prismatic specular reflex.
     if pill_stage > 0.01 {
         let p_alpha = pill_stage * opacity;
-        let h = (rect.height() * 0.48).max(4.0);
-        let highlight_top = Color32::from_rgba_unmultiplied(255, 255, 255, (75.0 * p_alpha) as u8);
+        let h = (rect.height() * 0.52).max(4.0);
+        let highlight_top = Color32::from_rgba_unmultiplied(255, 255, 255, (95.0 * p_alpha) as u8);
         let highlight_bot = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
 
-        // Meniscus specular arc
+        // Meniscus convex specular dome
         let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
         let meniscus = Squircle::new(sheen_rect, (r - 1.0).max(2.0)).with_flat_top(shape.flat_top);
         fill_gradient(painter, &meniscus.outline(), highlight_top, highlight_bot);
 
+        // Micro caustic refraction rim (inset 1.0px) around the whole pill
+        let inner_rect = rect.shrink(1.0);
+        if inner_rect.width() > 0.0 && inner_rect.height() > 0.0 {
+            let inner_pill = Squircle::new(inner_rect, (r - 1.0).max(2.0)).with_flat_top(shape.flat_top);
+            let caustic_c = Color32::from_rgba_unmultiplied(255, 255, 255, (45.0 * p_alpha) as u8);
+            painter.add(PathShape::closed_line(
+                inner_pill.outline(),
+                PathStroke::new(0.9, caustic_c),
+            ));
+        }
+
         // Sharp specular reflex line along the top curve
-        let x0 = rect.min.x + r * 0.6;
-        let x1 = rect.max.x - r * 0.6;
+        let x0 = rect.min.x + r * 0.55;
+        let x1 = rect.max.x - r * 0.55;
         if x1 > x0 + 10.0 {
             let mut mesh = Mesh::default();
             let y = rect.min.y + 1.2;
             let mid_x = 0.5 * (x0 + x1);
-            let c_center = Color32::from_rgba_unmultiplied(255, 255, 255, (140.0 * p_alpha) as u8);
+            let c_center = Color32::from_rgba_unmultiplied(255, 255, 255, (190.0 * p_alpha) as u8);
             let c_edge = Color32::TRANSPARENT;
             for (x, c) in [(x0, c_edge), (mid_x, c_center), (x1, c_edge)] {
                 mesh.colored_vertex(pos2(x, y), c);
@@ -182,18 +193,59 @@ pub fn liquid_sheen(
             mesh.add_triangle(2, 3, 4);
             mesh.add_triangle(3, 4, 5);
             painter.add(Shape::mesh(mesh));
+
+            // Chromatic / accent dispersion fringe directly underneath specular line
+            let mut prism_mesh = Mesh::default();
+            let py = y + 1.0;
+            let prism_c = with_alpha(
+                mix(Color32::from_rgb(180, 220, 255), theme.accent, 0.22),
+                (50.0 * p_alpha) as u8,
+            );
+            for (x, c) in [(x0, c_edge), (mid_x, prism_c), (x1, c_edge)] {
+                prism_mesh.colored_vertex(pos2(x, py), c);
+                prism_mesh.colored_vertex(pos2(x, py + 0.8), c);
+            }
+            prism_mesh.add_triangle(0, 1, 2);
+            prism_mesh.add_triangle(1, 2, 3);
+            prism_mesh.add_triangle(2, 3, 4);
+            prism_mesh.add_triangle(3, 4, 5);
+            painter.add(Shape::mesh(prism_mesh));
+        }
+
+        // Dynamic fluid shimmer glint across the pill
+        let pill_shimmer_t = (time * 0.7).sin() as f32 * 0.5 + 0.5;
+        if x1 > x0 + 30.0 {
+            let span = x1 - x0;
+            let cx = x0 + span * pill_shimmer_t;
+            let w = (span * 0.25).max(20.0);
+            let s_min = (cx - w * 0.5).max(x0);
+            let s_max = (cx + w * 0.5).min(x1);
+            if s_max > s_min + 4.0 && cx > s_min && cx < s_max {
+                let glint_c = Color32::from_rgba_unmultiplied(255, 255, 255, (60.0 * p_alpha) as u8);
+                let y = rect.min.y + 0.8;
+                let mut glint_mesh = Mesh::default();
+                for (x, c) in [(s_min, Color32::TRANSPARENT), (cx, glint_c), (s_max, Color32::TRANSPARENT)] {
+                    glint_mesh.colored_vertex(pos2(x, y), c);
+                    glint_mesh.colored_vertex(pos2(x, y + 1.2), c);
+                }
+                glint_mesh.add_triangle(0, 1, 2);
+                glint_mesh.add_triangle(1, 2, 3);
+                glint_mesh.add_triangle(2, 3, 4);
+                glint_mesh.add_triangle(3, 4, 5);
+                painter.add(Shape::mesh(glint_mesh));
+            }
         }
 
         // Subtle bottom bounce reflection (liquid light gathering)
         let bounce_rect = Rect::from_min_max(
-            pos2(rect.min.x + r, rect.max.y - 3.0),
+            pos2(rect.min.x + r, rect.max.y - 2.8),
             pos2(rect.max.x - r, rect.max.y - 1.0),
         );
         if bounce_rect.width() > 0.0 && bounce_rect.height() > 0.0 {
             painter.rect_filled(
                 bounce_rect,
                 1.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, (25.0 * p_alpha) as u8),
+                Color32::from_rgba_unmultiplied(255, 255, 255, (30.0 * p_alpha) as u8),
             );
         }
     }
@@ -207,9 +259,9 @@ pub fn liquid_sheen(
         // Subtle liquid sheen over the upper 38% of the panel
         let sheen_h = (rect.height() * 0.38).min(180.0);
         let top_c = if theme.dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, (28.0 * p_alpha) as u8)
+            Color32::from_rgba_unmultiplied(255, 255, 255, (34.0 * p_alpha) as u8)
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, (70.0 * p_alpha) as u8)
+            Color32::from_rgba_unmultiplied(255, 255, 255, (75.0 * p_alpha) as u8)
         };
         let bot_c = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
 
@@ -217,17 +269,17 @@ pub fn liquid_sheen(
         let sheen_shape = Squircle::new(sheen_rect, r).with_flat_top(shape.flat_top);
         fill_gradient(painter, &sheen_shape.outline(), top_c, bot_c);
 
-        // Inner optical caustic refraction rim (inset 1.2px)
+        // Inner optical caustic refraction rim (inset 1.2px) with subtle accent integration
         let inner_rect = rect.shrink(1.2);
         if inner_rect.width() > 0.0 && inner_rect.height() > 0.0 {
             let inner_shape = Squircle::new(inner_rect, (r - 1.2).max(4.0))
                 .with_exponent(shape.exponent)
                 .with_flat_top(shape.flat_top);
-            let caustic_c = if theme.dark {
-                Color32::from_rgba_unmultiplied(255, 255, 255, (22.0 * p_alpha) as u8)
-            } else {
-                Color32::from_rgba_unmultiplied(255, 255, 255, (55.0 * p_alpha) as u8)
-            };
+            let caustic_base = mix(Color32::WHITE, theme.accent, 0.16);
+            let caustic_c = with_alpha(
+                caustic_base,
+                (if theme.dark { 28.0 } else { 60.0 } * p_alpha) as u8,
+            );
             painter.add(PathShape::closed_line(
                 inner_shape.outline(),
                 PathStroke::new(1.0, caustic_c),
@@ -241,11 +293,11 @@ pub fn liquid_sheen(
         if x1 > x0 + 40.0 {
             let span = x1 - x0;
             let center_x = x0 + span * shimmer_x_t;
-            let width = (span * 0.3).max(30.0);
+            let width = (span * 0.32).max(35.0);
             let s_min = (center_x - width * 0.5).max(x0);
             let s_max = (center_x + width * 0.5).min(x1);
             if s_max > s_min + 4.0 && center_x > s_min && center_x < s_max {
-                let wave_c = Color32::from_rgba_unmultiplied(255, 255, 255, (45.0 * p_alpha) as u8);
+                let wave_c = Color32::from_rgba_unmultiplied(255, 255, 255, (55.0 * p_alpha) as u8);
                 let y = rect.min.y + 0.8;
                 let mut mesh = Mesh::default();
                 for (x, c) in [
@@ -263,24 +315,37 @@ pub fn liquid_sheen(
                 painter.add(Shape::mesh(mesh));
             }
         }
+
+        // Bottom desk bounce light (optical depth)
+        let bounce_rect = Rect::from_min_max(
+            pos2(rect.min.x + r * 1.5, rect.max.y - 2.5),
+            pos2(rect.max.x - r * 1.5, rect.max.y - 0.8),
+        );
+        if bounce_rect.width() > 0.0 && bounce_rect.height() > 0.0 {
+            painter.rect_filled(
+                bounce_rect,
+                1.0,
+                Color32::from_rgba_unmultiplied(255, 255, 255, (22.0 * p_alpha) as u8),
+            );
+        }
     }
 }
 
 /// Curved liquid glass specular sheen and refractive optical bevel for bento tiles.
 pub fn tile_liquid_sheen(painter: &Painter, rect: Rect, theme: &Theme, lift: f32) {
     let r = TILE_RADIUS;
-    let h = (rect.height() * 0.44).min(45.0);
+    let h = (rect.height() * 0.46).min(48.0);
     let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
     let s = Squircle::new(sheen_rect, (r - 0.5).max(4.0));
 
-    let alpha_boost = 1.0 + lift * 0.5;
+    let alpha_boost = 1.0 + lift * 0.6;
     let top_a = if theme.dark {
-        (34.0 * alpha_boost).min(80.0) as u8
+        (42.0 * alpha_boost).min(90.0) as u8
     } else {
-        (90.0 * alpha_boost).min(160.0) as u8
+        (95.0 * alpha_boost).min(170.0) as u8
     };
 
-    // Top specular gloss
+    // Top convex specular meniscus
     fill_gradient(
         painter,
         &s.outline(),
@@ -288,19 +353,59 @@ pub fn tile_liquid_sheen(painter: &Painter, rect: Rect, theme: &Theme, lift: f32
         Color32::from_rgba_unmultiplied(255, 255, 255, 0),
     );
 
-    // Inner optical refractive stroke (1px inset)
+    // Sharp specular hairline along the upper curve
+    let x0 = rect.min.x + r * 0.7;
+    let x1 = rect.max.x - r * 0.7;
+    if x1 > x0 + 10.0 {
+        let mut mesh = Mesh::default();
+        let y = rect.min.y + 0.8;
+        let mid_x = 0.5 * (x0 + x1);
+        let crest_a = if theme.dark {
+            (110.0 + lift * 80.0).min(220.0) as u8
+        } else {
+            (180.0 + lift * 60.0).min(255.0) as u8
+        };
+        let c_mid = Color32::from_rgba_unmultiplied(255, 255, 255, crest_a);
+        let c_edge = Color32::TRANSPARENT;
+        for (x, c) in [(x0, c_edge), (mid_x, c_mid), (x1, c_edge)] {
+            mesh.colored_vertex(pos2(x, y), c);
+            mesh.colored_vertex(pos2(x, y + 0.9), c);
+        }
+        mesh.add_triangle(0, 1, 2);
+        mesh.add_triangle(1, 2, 3);
+        mesh.add_triangle(2, 3, 4);
+        mesh.add_triangle(3, 4, 5);
+        painter.add(Shape::mesh(mesh));
+    }
+
+    // Inner optical refractive chamfer stroke (1.0px inset)
     let inner = rect.shrink(1.0);
     if inner.width() > 0.0 && inner.height() > 0.0 {
         let inner_shape = Squircle::new(inner, (r - 1.0).max(2.0));
-        let bevel_c = if theme.dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, (20.0 + lift * 15.0) as u8)
+        let bevel_base = mix(Color32::WHITE, theme.accent, lift * 0.22);
+        let bevel_a = if theme.dark {
+            (24.0 + lift * 32.0).min(80.0) as u8
         } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, (60.0 + lift * 25.0) as u8)
+            (65.0 + lift * 35.0).min(140.0) as u8
         };
         painter.add(PathShape::closed_line(
             inner_shape.outline(),
-            PathStroke::new(0.8, bevel_c),
+            PathStroke::new(0.9, with_alpha(bevel_base, bevel_a)),
         ));
+    }
+
+    // Subtle bottom bounce highlight on the card
+    let bottom_hairline = Rect::from_min_max(
+        pos2(rect.min.x + r * 1.2, rect.max.y - 1.8),
+        pos2(rect.max.x - r * 1.2, rect.max.y - 0.8),
+    );
+    if bottom_hairline.width() > 0.0 && bottom_hairline.height() > 0.0 {
+        let bounce_a = (14.0 + lift * 18.0) as u8;
+        painter.rect_filled(
+            bottom_hairline,
+            0.5,
+            Color32::from_rgba_unmultiplied(255, 255, 255, bounce_a),
+        );
     }
 }
 
