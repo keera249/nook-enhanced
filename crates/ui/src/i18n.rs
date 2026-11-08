@@ -293,6 +293,8 @@ pub fn translate_ar(key: &str) -> &str {
         "Mark up, then copy or save" => "تعديل ثم نسخ أو حفظ",
         "Straight to the clipboard" => "مباشرة إلى الحافظة",
         "PNG in Screenshots, and copied" => "حفظ في اللقطات ونسخها",
+        "Open in the editor" => "فتح في المحرر",
+        "Click to edit · Right click to copy" => "انقر للتعديل · زر أيمن للنسخ",
 
         // Wallpaper
         "Next" => "التالي",

@@ -13,6 +13,7 @@
 //! with those settings and the last few captures, which reopen in the
 //! editor.
 
+use crate::kit;
 use crate::shot_editor::{self, Editor};
 use crate::snipper::Snipper;
 use egui::{
@@ -34,11 +35,12 @@ const DELAY_LABELS: [&str; 4] = ["Off", "3 s", "5 s", "10 s"];
 const RECENT: usize = 4;
 /// Thumbnail edge, pixels.
 const THUMB: u32 = 240;
+const SETTINGS_FILE: &str = "screenshot.txt";
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub enum After {
-    #[default]
     Edit,
+    #[default]
     Copy,
     Save,
 }
@@ -93,6 +95,41 @@ fn thumbnail(frame: &Frame) -> ColorImage {
 }
 
 impl Screenshot {
+    fn load_settings(&mut self) {
+        for (k, v) in kit::read_settings(SETTINGS_FILE) {
+            match k.as_str() {
+                "after" => {
+                    self.after = match v.as_str() {
+                        "edit" => After::Edit,
+                        "save" => After::Save,
+                        _ => After::Copy,
+                    };
+                }
+                "delay" => {
+                    if let Ok(d) = v.parse::<usize>() {
+                        self.delay = d.min(DELAYS.len() - 1);
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn save_settings(&self) {
+        let after_str = match self.after {
+            After::Edit => "edit",
+            After::Copy => "copy",
+            After::Save => "save",
+        };
+        kit::write_settings(
+            SETTINGS_FILE,
+            &[
+                ("after", after_str.to_owned()),
+                ("delay", self.delay.to_string()),
+            ],
+        );
+    }
+
     fn start(&mut self) {
         if self.pending.take().is_some() {
             // A second press cancels the countdown.
@@ -117,17 +154,14 @@ impl Screenshot {
                     return None;
                 };
                 tracing::info!("screenshot: {}x{}", frame.width, frame.height);
+                if let Err(e) = clipboard::copy_image(&frame) {
+                    tracing::warn!("screenshot: copying: {e}");
+                }
                 match after {
-                    After::Edit => {}
-                    After::Copy => {
-                        if let Err(e) = clipboard::copy_image(&frame) {
-                            tracing::warn!("screenshot: copying: {e}");
-                        }
-                    }
+                    After::Edit | After::Copy => {}
                     After::Save => match shot_editor::save(&frame) {
                         Ok(path) => {
                             tracing::info!("screenshot: saved {}", path.display());
-                            let _ = clipboard::copy_image(&frame);
                         }
                         Err(e) => tracing::warn!("screenshot: saving: {e}"),
                     },
@@ -179,6 +213,7 @@ impl Module for Screenshot {
     }
 
     fn attach(&mut self, ctx: &egui::Context) {
+        self.load_settings();
         self.snipper.attach(ctx);
         self.repaint = Some(ctx.clone());
     }
@@ -296,7 +331,9 @@ impl Module for Screenshot {
         let y0 = body.min.y + 14.0;
         label(ui, y0, "Delay");
         let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(row(y0)));
-        widgets::segmented(&mut rui, &DELAY_LABELS, &mut self.delay, theme);
+        if widgets::segmented(&mut rui, &DELAY_LABELS, &mut self.delay, theme).changed() {
+            self.save_settings();
+        }
         let y1 = y0 + 34.0;
         label(ui, y1, "After capture");
         let mut after = After::ALL
@@ -306,6 +343,7 @@ impl Module for Screenshot {
         let mut rui = ui.new_child(egui::UiBuilder::new().max_rect(row(y1)));
         if widgets::segmented(&mut rui, &After::LABELS, &mut after, theme).changed() {
             self.after = After::ALL[after];
+            self.save_settings();
         }
         ui.painter().text(
             pos2(body.max.x, y1),
@@ -377,8 +415,13 @@ impl Module for Screenshot {
                     false,
                 );
             }
-            if resp.on_hover_text("Open in the editor").clicked() {
+            let tip = nook_ui::i18n::tr("Click to edit · Right click to copy");
+            let resp = resp.on_hover_text(tip);
+            if resp.clicked() {
                 open = Some(r.frame.clone());
+            }
+            if resp.secondary_clicked() {
+                let _ = clipboard::copy_image(&r.frame);
             }
         }
         if let Some(f) = open {
