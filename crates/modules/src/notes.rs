@@ -382,7 +382,7 @@ impl Module for Notes {
         );
         let (preview, color) = match self.notes.iter().find(|n| !n.text.trim().is_empty()) {
             Some(n) => (n.title(), theme.text_dim),
-            None => ("Write something".to_owned(), theme.text_faint),
+            None => (nook_ui::i18n::tr("Write something"), theme.text_faint),
         };
         one_line(
             ui,
@@ -400,13 +400,13 @@ impl Module for Notes {
     fn ui_page(&mut self, ui: &mut Ui, header: &mut Ui, body: Rect, theme: &Theme) -> bool {
         if !self.notes.is_empty()
             && widgets::icon_button(header, icons::TRASH, 26.0, false, theme)
-                .on_hover_text("Move this note to the Recycle Bin")
+                .on_hover_text(nook_ui::i18n::tr("Move this note to the Recycle Bin"))
                 .clicked()
         {
             self.delete_current();
         }
         if widgets::icon_button(header, icons::PLUS, 26.0, false, theme)
-            .on_hover_text("New note")
+            .on_hover_text(nook_ui::i18n::tr("New note"))
             .clicked()
         {
             self.new_note();
@@ -415,7 +415,7 @@ impl Module for Notes {
             ui.painter().text(
                 body.center(),
                 Align2::CENTER_CENTER,
-                "No notes. Press + to start one.",
+                nook_ui::i18n::tr("No notes. Press + to start one."),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
             );

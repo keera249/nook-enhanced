@@ -243,13 +243,13 @@ impl Module for Screenshot {
                 Theme::font_semibold(SIZE_BIG - 6.0),
                 theme.accent_fg(),
             );
-            resp.on_hover_text("Click to cancel");
+            resp.on_hover_text(nook_ui::i18n::tr("Click to cancel"));
             return;
         }
         let resp = self
             .snipper
             .tile(ui, ctx, icons::SELECTION, "shot-tile")
-            .on_hover_text("Click to capture  \u{00B7}  Right click for options");
+            .on_hover_text(nook_ui::i18n::tr("Click to capture  \u{00B7}  Right click for options"));
         if resp.clicked() {
             self.start();
         }
@@ -266,7 +266,7 @@ impl Module for Screenshot {
 
     fn ui_page(&mut self, ui: &mut Ui, header: &mut Ui, body: Rect, theme: &Theme) -> bool {
         if widgets::icon_button(header, icons::FOLDER_OPEN, 26.0, false, theme)
-            .on_hover_text("Open the Screenshots folder")
+            .on_hover_text(nook_ui::i18n::tr("Open the Screenshots folder"))
             .clicked()
             && let Some(dir) = shell::screenshots_dir()
         {
@@ -276,7 +276,7 @@ impl Module for Screenshot {
             }
         }
         if widgets::icon_button(header, icons::SELECTION, 26.0, false, theme)
-            .on_hover_text("Capture (Ctrl+Alt+S)")
+            .on_hover_text(nook_ui::i18n::tr("Capture (Ctrl+Alt+S)"))
             .clicked()
         {
             self.start();
@@ -286,7 +286,7 @@ impl Module for Screenshot {
             ui.painter().text(
                 pos2(body.min.x, y),
                 Align2::LEFT_CENTER,
-                text,
+                nook_ui::i18n::tr(text),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
             );
@@ -311,9 +311,9 @@ impl Module for Screenshot {
             pos2(body.max.x, y1),
             Align2::RIGHT_CENTER,
             match self.after {
-                After::Edit => "Mark up, then copy or save",
-                After::Copy => "Straight to the clipboard",
-                After::Save => "PNG in Screenshots, and copied",
+                After::Edit => nook_ui::i18n::tr("Mark up, then copy or save"),
+                After::Copy => nook_ui::i18n::tr("Straight to the clipboard"),
+                After::Save => nook_ui::i18n::tr("PNG in Screenshots, and copied"),
             },
             Theme::font(SIZE_LABEL),
             theme.text_faint,
@@ -326,7 +326,7 @@ impl Module for Screenshot {
             ui.painter().text(
                 area.center(),
                 Align2::CENTER_CENTER,
-                "Captures show up here.",
+                nook_ui::i18n::tr("Captures show up here."),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_faint,
             );

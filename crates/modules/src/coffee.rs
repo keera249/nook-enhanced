@@ -19,7 +19,7 @@ const DURATIONS: [Option<u64>; 5] = [None, Some(15), Some(30), Some(60), Some(12
 
 fn duration_label(minutes: Option<u64>) -> String {
     match minutes {
-        None => "Always".into(),
+        None => nook_ui::i18n::tr("Always"),
         Some(m) if m >= 60 => format!("{} h", m / 60),
         Some(m) => format!("{m} min"),
     }
@@ -191,13 +191,13 @@ impl Module for Coffee {
         }
         let status = match (self.on, self.left()) {
             (Some(_), Some(left)) => remaining_label(left),
-            (Some(_), None) => "Awake".to_owned(),
+            (Some(_), None) => nook_ui::i18n::tr("Awake"),
             (None, _) => duration_label(DURATIONS[self.choice]),
         };
         painter.text(
             pos2(text.min.x, cy - 7.0),
             Align2::LEFT_CENTER,
-            "Coffee",
+            nook_ui::i18n::tr("Coffee"),
             Theme::font_semibold(SIZE_LABEL + 1.0),
             theme.text,
         );
@@ -214,7 +214,7 @@ impl Module for Coffee {
             status_color,
         );
         if !active {
-            resp.on_hover_text("Click to change how long");
+            resp.on_hover_text(nook_ui::i18n::tr("Click to change how long"));
         }
 
         // Switch on the right.

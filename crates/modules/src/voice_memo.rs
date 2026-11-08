@@ -455,9 +455,9 @@ impl VoiceMemo {
             mix(RED, Color32::WHITE, 0.08 * hover),
         );
         let hint = if recording {
-            "Click to stop and save"
+            nook_ui::i18n::tr("Click to stop and save")
         } else {
-            "Click to record  \u{00B7}  Ctrl+Alt+R anywhere"
+            nook_ui::i18n::tr("Click to record  \u{00B7}  Ctrl+Alt+R anywhere")
         };
         ui.painter().text(
             pos2(c.x, inner.max.y - 4.0),
@@ -485,11 +485,12 @@ impl VoiceMemo {
         }
         let list = Rect::from_min_max(area.min + vec2(0.0, 20.0), area.max);
         if self.memos.is_empty() {
+            let empty_msg = nook_ui::i18n::tr("Your memos will show up here");
             kit::empty(
                 ui,
                 list.center(),
                 icons::MICROPHONE,
-                "Your memos will show up here",
+                &empty_msg,
                 theme,
             );
             return;
@@ -616,14 +617,14 @@ impl VoiceMemo {
                     let hovered = ui.rect_contains_pointer(r);
                     if hovered && !resp.dragged() {
                         let icons_at = [
-                            (icons::PENCIL_SIMPLE, "rename", "Rename"),
-                            (icons::FOLDER_OPEN, "reveal", "Show in Explorer"),
-                            (icons::TRASH, "delete", "Move to the Recycle Bin"),
+                            (icons::PENCIL_SIMPLE, "rename", nook_ui::i18n::tr("Rename")),
+                            (icons::FOLDER_OPEN, "reveal", nook_ui::i18n::tr("Show in Explorer")),
+                            (icons::TRASH, "delete", nook_ui::i18n::tr("Move to the Recycle Bin")),
                         ];
                         for (k, (glyph, what, tip)) in icons_at.iter().enumerate() {
                             let c = pos2(wave.max.x - 12.0 - k as f32 * 32.0, r.center().y);
                             if kit::icon_at(ui, c, 28.0, glyph, false, theme)
-                                .on_hover_text(*tip)
+                                .on_hover_text(tip)
                                 .clicked()
                             {
                                 action = Some((i, what));
@@ -845,7 +846,7 @@ impl Module for VoiceMemo {
                 theme.text,
             );
             if resp
-                .on_hover_text("Recording  \u{00B7}  click to stop")
+                .on_hover_text(nook_ui::i18n::tr("Recording  \u{00B7}  click to stop"))
                 .clicked()
             {
                 self.toggle_recording();
@@ -853,7 +854,7 @@ impl Module for VoiceMemo {
             return;
         }
         if kit::tool_tile(ui, ctx, icons::MICROPHONE, false)
-            .on_hover_text("Record a voice memo  \u{00B7}  Ctrl+Alt+R")
+            .on_hover_text(nook_ui::i18n::tr("Record a voice memo  \u{00B7}  Ctrl+Alt+R"))
             .clicked()
         {
             self.reload();
@@ -864,7 +865,7 @@ impl Module for VoiceMemo {
     fn ui_page(&mut self, ui: &mut Ui, header: &mut Ui, body: Rect, theme: &Theme) -> bool {
         self.page_seen = Some(Instant::now());
         if widgets::icon_button(header, icons::FOLDER_OPEN, 26.0, false, theme)
-            .on_hover_text("Open Music\\Voice memos")
+            .on_hover_text(nook_ui::i18n::tr("Open Music\\Voice memos"))
             .clicked()
             && let Some(dir) = &self.dir
         {

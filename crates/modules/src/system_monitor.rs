@@ -351,7 +351,7 @@ impl SystemMonitor {
                     Id::new(("sysmon-disk", disk.name.as_str())),
                     Sense::click(),
                 )
-                .on_hover_text("Open in Explorer");
+                .on_hover_text(nook_ui::i18n::tr("Open in Explorer"));
             if resp.clicked() {
                 let _ = shell::open(&format!("{}\\", disk.name));
             }
@@ -425,7 +425,7 @@ impl SystemMonitor {
             ui.painter().text(
                 inner.center(),
                 Align2::CENTER_CENTER,
-                "Measuring\u{2026}",
+                nook_ui::i18n::tr("Measuring…"),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_faint,
             );
@@ -634,7 +634,7 @@ impl Module for SystemMonitor {
                 let label = painter.text(
                     pos,
                     align,
-                    name,
+                    nook_ui::i18n::tr(name),
                     Theme::font_semibold(SIZE_LABEL - 2.0),
                     theme.text_dim,
                 );
@@ -690,7 +690,7 @@ impl Module for SystemMonitor {
             self.sample();
         }
         if widgets::icon_button(header, icons::ARROW_SQUARE_OUT, 26.0, false, theme)
-            .on_hover_text("Open Task Manager")
+            .on_hover_text(nook_ui::i18n::tr("Open Task Manager"))
             .clicked()
         {
             let _ = shell::open("taskmgr.exe");

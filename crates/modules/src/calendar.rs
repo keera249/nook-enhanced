@@ -102,11 +102,39 @@ fn today() -> (i64, u32) {
 /// "Today", "Tomorrow", "In 12 days", "3 days ago".
 fn relative(day: i64, today: i64) -> String {
     match day - today {
-        0 => "Today".into(),
-        1 => "Tomorrow".into(),
-        -1 => "Yesterday".into(),
-        n if n > 0 => format!("In {n} days"),
-        n => format!("{} days ago", -n),
+        0 => nook_ui::i18n::tr("Today"),
+        1 => nook_ui::i18n::tr("Tomorrow"),
+        -1 => nook_ui::i18n::tr("Yesterday"),
+        n if n > 0 => {
+            if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi(&format!("خلال {n} يوم"))
+            } else {
+                format!("In {n} days")
+            }
+        }
+        n => {
+            if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi(&format!("منذ {} يوم", -n))
+            } else {
+                format!("{} days ago", -n)
+            }
+        }
+    }
+}
+
+fn weekday_short(wd: u32) -> String {
+    if nook_ui::i18n::is_arabic() {
+        match wd {
+            0 => nook_ui::i18n::tr("Monday"),
+            1 => nook_ui::i18n::tr("Tuesday"),
+            2 => nook_ui::i18n::tr("Wednesday"),
+            3 => nook_ui::i18n::tr("Thursday"),
+            4 => nook_ui::i18n::tr("Friday"),
+            5 => nook_ui::i18n::tr("Saturday"),
+            _ => nook_ui::i18n::tr("Sunday"),
+        }
+    } else {
+        WEEKDAYS[(wd as usize).min(6)][..2].to_owned()
     }
 }
 
@@ -361,7 +389,7 @@ impl Calendar {
             false,
             theme,
         )
-        .on_hover_text("Next month")
+        .on_hover_text(nook_ui::i18n::tr("Next month"))
         .clicked()
         {
             self.shift_month(1, now);
@@ -374,7 +402,7 @@ impl Calendar {
             false,
             theme,
         )
-        .on_hover_text("Previous month")
+        .on_hover_text(nook_ui::i18n::tr("Previous month"))
         .clicked()
         {
             self.shift_month(-1, now);
@@ -382,7 +410,8 @@ impl Calendar {
         let (ty, tm, _) = civil_from_days(today);
         if (ty, tm) != self.month || self.selected != today {
             let r = Rect::from_center_size(pos2(inner.max.x - 92.0, title_y), vec2(52.0, 22.0));
-            if kit::chip(ui, r, "Today", false, theme).clicked() {
+            let today_lbl = nook_ui::i18n::tr("Today");
+            if kit::chip(ui, r, &today_lbl, false, theme).clicked() {
                 self.go_to(today, now);
             }
         }
@@ -400,7 +429,7 @@ impl Calendar {
                     grid.min.y + head_h * 0.5,
                 ),
                 Align2::CENTER_CENTER,
-                &WEEKDAYS[wd as usize][..2],
+                weekday_short(wd),
                 Theme::font_semibold(SIZE_LABEL - 1.0),
                 if wd >= 5 {
                     theme.text_faint
@@ -601,7 +630,7 @@ impl Calendar {
             ui.painter().text(
                 pos2(list.min.x + 2.0, list.min.y + 6.0),
                 Align2::LEFT_TOP,
-                "Nothing planned",
+                nook_ui::i18n::tr("Nothing planned"),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_faint,
             );
@@ -617,7 +646,7 @@ impl Calendar {
                 kit::section(
                     ui,
                     pos2(list.min.x + 2.0, list.min.y + 34.0),
-                    "COMING UP",
+                    &nook_ui::i18n::tr("COMING UP"),
                     theme,
                 );
                 for (k, e) in upcoming.iter().enumerate() {
@@ -673,7 +702,7 @@ impl Calendar {
             ui.painter().text(
                 pill.center(),
                 Align2::CENTER_CENTER,
-                e.time.map_or("All day".into(), hhmm),
+                e.time.map_or_else(|| nook_ui::i18n::tr("All day"), hhmm),
                 Theme::font_semibold(SIZE_LABEL - 1.0),
                 pill_fg,
             );
@@ -694,7 +723,7 @@ impl Calendar {
                     false,
                     theme,
                 )
-                .on_hover_text("Delete")
+                .on_hover_text(nook_ui::i18n::tr("Delete"))
                 .clicked()
             {
                 remove = Some(*i);
@@ -708,11 +737,12 @@ impl Calendar {
         // Adding.
         let field = Rect::from_min_max(pos2(col.min.x, col.max.y - field_h), col.max);
         let id = Id::new(FIELD_ID);
+        let add_prompt = nook_ui::i18n::tr("Add: 14:30 Dentist");
         let resp = kit::field(
             ui,
             Rect::from_min_max(field.min, pos2(field.max.x - 40.0, field.max.y)),
             &mut self.draft,
-            "Add: 14:30 Dentist",
+            &add_prompt,
             id,
             Theme::font(SIZE_BODY),
             theme,
@@ -813,7 +843,7 @@ impl Module for Calendar {
         let resp = ui.interact(rect.expand(10.0), ui.id().with("cal-tile"), Sense::click());
         let (day, secs) = today();
         let (_, m, d) = civil_from_days(day);
-        let wd = &WEEKDAYS[weekday(day) as usize][..3];
+        let wd_str = weekday_short(weekday(day));
         let painter = ui.painter();
         let accent = if self.alert.is_some() || ctx.hovered {
             theme.accent_fg()
@@ -830,7 +860,7 @@ impl Module for Calendar {
             painter.text(
                 c - vec2(0.0, 10.0),
                 Align2::CENTER_CENTER,
-                wd.to_uppercase(),
+                if nook_ui::i18n::is_arabic() { wd_str.clone() } else { wd_str.to_uppercase() },
                 Theme::font_semibold(SIZE_LABEL - 2.0),
                 accent,
             );
@@ -843,10 +873,10 @@ impl Module for Calendar {
             );
             let x = rect.min.x + 46.0;
             let (top, bottom) = match next_today {
-                Some(e) => (e.time.map_or("Today".into(), hhmm), e.title.clone()),
+                Some(e) => (e.time.map_or_else(|| nook_ui::i18n::tr("Today"), hhmm), e.title.clone()),
                 None => (
-                    MONTHS[m as usize - 1].to_owned(),
-                    "No more events today".into(),
+                    nook_ui::i18n::tr(MONTHS[m as usize - 1]),
+                    nook_ui::i18n::tr("No more events today"),
                 ),
             };
             kit::one_line(
@@ -870,7 +900,7 @@ impl Module for Calendar {
             painter.text(
                 c - vec2(0.0, 11.0),
                 Align2::CENTER_CENTER,
-                wd.to_uppercase(),
+                if nook_ui::i18n::is_arabic() { wd_str.clone() } else { wd_str.to_uppercase() },
                 Theme::font_semibold(SIZE_LABEL - 2.0),
                 accent,
             );
@@ -890,16 +920,28 @@ impl Module for Calendar {
             }
         }
         let tip = match next_today {
-            Some(e) => format!(
-                "Next: {}{}",
-                e.time.map_or(String::new(), |t| format!("{} ", hhmm(t))),
-                e.title
-            ),
-            None => format!(
-                "{} {d} {}",
-                WEEKDAYS[weekday(day) as usize],
-                MONTHS[m as usize - 1]
-            ),
+            Some(e) => {
+                let next_prefix = nook_ui::i18n::tr("Next: ");
+                format!(
+                    "{}{}{}",
+                    next_prefix,
+                    e.time.map_or(String::new(), |t| format!("{} ", hhmm(t))),
+                    e.title
+                )
+            }
+            None => {
+                let wd_name = nook_ui::i18n::tr(WEEKDAYS[weekday(day) as usize]);
+                let mo_name = nook_ui::i18n::tr(MONTHS[m as usize - 1]);
+                if nook_ui::i18n::is_arabic() {
+                    format!("{wd_name} {d} {mo_name}")
+                } else {
+                    format!(
+                        "{} {d} {}",
+                        WEEKDAYS[weekday(day) as usize],
+                        MONTHS[m as usize - 1]
+                    )
+                }
+            }
         };
         if resp.on_hover_text(tip).clicked() {
             let now = ui.input(|i| i.time);

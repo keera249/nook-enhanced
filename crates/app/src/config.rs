@@ -1,6 +1,7 @@
 //! User configuration in `%APPDATA%\Nook\config.toml`.
 
 use anyhow::{Context, Result};
+use nook_ui::i18n::Language;
 use nook_ui::module::TileSize;
 use nook_ui::shell::Placement;
 use nook_ui::theme::{Look, ThemeMode, parse_hex};
@@ -113,6 +114,8 @@ pub struct Config {
     pub grain_size: GrainSize,
     /// Top-left corner, top center or top-right corner.
     pub placement: Placement,
+    #[serde(default)]
+    pub language: Language,
     /// Floating island pill or hardware notch flush with the top edge.
     #[serde(default)]
     pub notch_shape: NotchShape,
@@ -167,6 +170,7 @@ impl Default for Config {
             grain: DEFAULT_GRAIN,
             grain_size: GrainSize::Fine,
             placement: Placement::Center,
+            language: Language::Arabic,
             notch_shape: NotchShape::Notch,
             on_top: true,
             hide_in_fullscreen: false,

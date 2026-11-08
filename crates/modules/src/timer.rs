@@ -425,7 +425,7 @@ impl Module for Timer {
             with_alpha(theme.accent_fg(), 0.4 + 0.6 * pulse),
         );
         let (text, color) = if finished {
-            ("Done".to_owned(), theme.accent_fg())
+            (nook_ui::i18n::tr("Done"), theme.accent_fg())
         } else {
             let dim = matches!(self.clock.phase, Phase::Paused { .. });
             (
@@ -511,15 +511,15 @@ impl Module for Timer {
         let countdown = self.clock.mode == Mode::Countdown;
 
         let (left, left_tip) = if idle && countdown {
-            (Some(icons::MINUS), "1 minute less")
+            (Some(icons::MINUS), nook_ui::i18n::tr("1 minute less"))
         } else if idle {
-            (None, "")
+            (None, String::new())
         } else {
-            (Some(icons::ARROW_COUNTER_CLOCKWISE), "Reset")
+            (Some(icons::ARROW_COUNTER_CLOCKWISE), nook_ui::i18n::tr("Reset"))
         };
         if let Some(g) = left
             && button_at(ui, pos2(cx - gap, y), 24.0, g, false, theme)
-                .on_hover_text(left_tip)
+                .on_hover_text(&left_tip)
                 .clicked()
         {
             if idle {
@@ -530,13 +530,13 @@ impl Module for Timer {
         }
 
         let (mid, mid_tip) = match self.clock.phase {
-            Phase::Running { .. } => (icons::PAUSE, "Pause"),
-            Phase::Finished => (icons::CHECK, "Dismiss"),
-            Phase::Paused { .. } => (icons::PLAY, "Resume"),
-            Phase::Idle => (icons::PLAY, "Start"),
+            Phase::Running { .. } => (icons::PAUSE, nook_ui::i18n::tr("Pause")),
+            Phase::Finished => (icons::CHECK, nook_ui::i18n::tr("Dismiss")),
+            Phase::Paused { .. } => (icons::PLAY, nook_ui::i18n::tr("Resume")),
+            Phase::Idle => (icons::PLAY, nook_ui::i18n::tr("Start")),
         };
         if button_at(ui, pos2(cx, y), 28.0, mid, true, theme)
-            .on_hover_text(mid_tip)
+            .on_hover_text(&mid_tip)
             .clicked()
         {
             if finished {
@@ -548,12 +548,12 @@ impl Module for Timer {
 
         if countdown {
             let tip = if finished {
-                "One more minute"
+                nook_ui::i18n::tr("One more minute")
             } else {
-                "1 minute more"
+                nook_ui::i18n::tr("1 minute more")
             };
             if button_at(ui, pos2(cx + gap, y), 24.0, icons::PLUS, false, theme)
-                .on_hover_text(tip)
+                .on_hover_text(&tip)
                 .clicked()
             {
                 if finished {

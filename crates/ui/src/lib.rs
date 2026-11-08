@@ -5,6 +5,7 @@ pub mod anim;
 pub mod arabic;
 pub mod bento;
 pub mod geometry;
+pub mod i18n;
 pub mod module;
 pub mod page;
 pub mod paint;

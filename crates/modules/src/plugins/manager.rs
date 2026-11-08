@@ -106,7 +106,7 @@ impl Module for PluginsTile {
     fn ui_page(&mut self, ui: &mut Ui, header: &mut Ui, body: Rect, theme: &Theme) -> bool {
         self.rescan();
         if widgets::icon_button(header, ph::FOLDER_OPEN, nook_ui::page::HEADER, false, theme)
-            .on_hover_text("Open the plugins folder")
+            .on_hover_text(nook_ui::i18n::tr("Open the plugins folder"))
             .clicked()
         {
             let _ = nook_platform::shell::open(&install::plugins_root().display().to_string());
@@ -142,11 +142,12 @@ impl Module for PluginsTile {
                 );
                 if self.installed.is_empty() {
                     let (rect, _) = ui.allocate_exact_size(vec2(w - 8.0, 120.0), Sense::hover());
+                    let empty_msg = nook_ui::i18n::tr("No plugins yet. Install one from the marketplace, or drop a .zip here.");
                     kit::empty(
                         ui,
                         rect.center(),
                         ph::PUZZLE_PIECE,
-                        "No plugins yet. Install one from the marketplace, or drop a .zip here.",
+                        &empty_msg,
                         theme,
                     );
                 }
@@ -201,14 +202,14 @@ fn drop_zone(ui: &Ui, body: Rect, theme: &Theme) {
     painter.text(
         c + vec2(0.0, 14.0),
         Align2::CENTER_CENTER,
-        "Drop a plugin .zip or .7z to install",
+        nook_ui::i18n::tr("Drop a plugin .zip or .7z to install"),
         Theme::font_semibold(SIZE_BODY + 2.0),
         theme.text,
     );
     painter.text(
         c + vec2(0.0, 36.0),
         Align2::CENTER_CENTER,
-        "One plugin or a bundle of several",
+        nook_ui::i18n::tr("One plugin or a bundle of several"),
         Theme::font(SIZE_LABEL),
         theme.text_dim,
     );

@@ -83,11 +83,12 @@ pub fn toggle(ui: &mut Ui, on: &mut bool, theme: &Theme) -> Response {
 /// Segmented control; the highlight slides between options on a spring.
 pub fn segmented(ui: &mut Ui, options: &[&str], selected: &mut usize, theme: &Theme) -> Response {
     let font = Theme::font(SIZE_LABEL);
-    let seg_w = options
+    let translated: Vec<String> = options.iter().map(|o| crate::i18n::tr(o)).collect();
+    let seg_w = translated
         .iter()
         .map(|o| {
             ui.painter()
-                .layout_no_wrap(crate::arabic::shape_bidi(o), font.clone(), theme.text)
+                .layout_no_wrap(o.clone(), font.clone(), theme.text)
                 .size()
                 .x
         })
@@ -128,11 +129,11 @@ pub fn segmented(ui: &mut Ui, options: &[&str], selected: &mut usize, theme: &Th
         Color32::WHITE
     };
     painter.rect_filled(hl, 10.0, hl_fill);
-    for (i, o) in options.iter().enumerate() {
+    for (i, o) in translated.iter().enumerate() {
         let c = pos2(rect.min.x + 2.0 + seg_w * (i as f32 + 0.5), rect.center().y);
         let near = 1.0 - (pos - i as f32).abs().min(1.0);
         let color = mix(theme.text_dim, theme.text, near);
-        painter.text(c, Align2::CENTER_CENTER, crate::arabic::shape_bidi(o), font.clone(), color);
+        painter.text(c, Align2::CENTER_CENTER, o.clone(), font.clone(), color);
     }
     resp
 }

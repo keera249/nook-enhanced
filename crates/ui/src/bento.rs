@@ -278,8 +278,9 @@ pub fn show(
             with_alpha(color, cctx.alpha),
             editing,
         );
+        let edit_tip = if editing { crate::i18n::tr("Done") } else { crate::i18n::tr("Edit modules") };
         if resp
-            .on_hover_text(if editing { "Done" } else { "Edit the layout" })
+            .on_hover_text(edit_tip)
             .clicked()
         {
             out.toggle_edit = true;
@@ -451,7 +452,7 @@ pub fn show(
                     let hovered = interactive && ui.rect_contains_pointer(rect);
                     let pressed = hovered && ctx.input(|i| i.pointer.primary_down());
                     if hovered && drag.is_none() {
-                        caption = Some((tile.module.name().to_owned(), ready || editing));
+                        caption = Some((crate::i18n::tr(tile.module.name()), ready || editing));
                     }
                     let lift = anim::spring(
                         &ctx,
@@ -602,7 +603,7 @@ pub fn show(
             && let Some(t) = tiles.iter().find(|t| t.module.id() == id)
         {
             caption = Some((
-                format!("{}  ·  Click outside to fold", t.module.name()),
+                format!("{}  ·  {}", crate::i18n::tr(t.module.name()), crate::i18n::tr("Click outside to fold")),
                 true,
             ));
         }
@@ -613,7 +614,11 @@ pub fn show(
     let caption = caption.or_else(|| {
         editing.then(|| {
             (
-                "Drag to move  ·  tick to show  ·  pick a size".to_owned(),
+                if crate::i18n::is_arabic() {
+                    crate::arabic::shape_bidi("اسحب للتحريك  ·  اختر لإظهار  ·  حدد الحجم")
+                } else {
+                    "Drag to move  ·  tick to show  ·  pick a size".to_owned()
+                },
                 true,
             )
         })
@@ -622,12 +627,12 @@ pub fn show(
         let text = if ready {
             name
         } else {
-            format!("{name}  ·  Coming soon")
+            format!("{name}  ·  {}", crate::i18n::tr("Coming soon"))
         };
         ui.painter().text(
             pos2(cctx.panel.center().x, gutter_y),
             Align2::CENTER_CENTER,
-            text,
+            crate::arabic::shape_bidi(&text),
             Theme::font(SIZE_LABEL),
             with_alpha(theme.text_dim, cctx.alpha),
         );
@@ -775,7 +780,7 @@ fn compact_tile(ui: &mut Ui, inner: Rect, module: &dyn Module, theme: &Theme, ho
         painter.text(
             pos2(x, name_y),
             Align2::LEFT_CENTER,
-            module.name(),
+            crate::i18n::tr(module.name()),
             Theme::font_semibold(SIZE_LABEL + 1.0),
             theme.text,
         );
@@ -783,7 +788,7 @@ fn compact_tile(ui: &mut Ui, inner: Rect, module: &dyn Module, theme: &Theme, ho
             painter.text(
                 pos2(x, inner.center().y + 8.0),
                 Align2::LEFT_CENTER,
-                sub,
+                crate::arabic::shape_bidi(sub),
                 Theme::font(SIZE_LABEL - 1.0),
                 theme.text_dim,
             );
@@ -860,7 +865,7 @@ pub fn tile_header(ui: &mut Ui, icon: &'static str, name: &str, active: bool, th
     painter.text(
         pos2(rect.min.x + 24.0, rect.min.y + 9.0),
         Align2::LEFT_CENTER,
-        name,
+        crate::i18n::tr(name),
         Theme::font_semibold(SIZE_LABEL),
         theme.text_dim,
     );

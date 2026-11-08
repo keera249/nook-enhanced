@@ -182,7 +182,7 @@ pub fn page(
             }
             hui.add_space(4.0);
             hui.label(
-                egui::RichText::new("Settings")
+                egui::RichText::new(nook_ui::i18n::tr("Settings"))
                     .font(Theme::font_semibold(SIZE_BODY + 1.0))
                     .color(theme.text),
             );
@@ -335,6 +335,17 @@ pub fn page(
                 out.startup_toggled = true;
                 out.changed = true;
             }
+            let mut lang_idx = match cfg.language {
+                nook_ui::i18n::Language::Arabic => 0,
+                nook_ui::i18n::Language::English => 1,
+            };
+            if row(&mut rui, "Language", theme, |ui| {
+                widgets::segmented(ui, &["العربية", "English"], &mut lang_idx, theme)
+            }) {
+                cfg.language = [nook_ui::i18n::Language::Arabic, nook_ui::i18n::Language::English][lang_idx];
+                nook_ui::i18n::set_language(cfg.language);
+                out.changed = true;
+            }
 
             let open = open_section(&ctx);
             let mut y = top.max.y + GAP;
@@ -348,10 +359,10 @@ pub fn page(
                 widgets::card(ui.painter(), card, theme);
                 let head = Rect::from_min_size(card.min, vec2(card.width(), DISCLOSURE));
                 let (glyph, title, summary) = match section {
-                    CUSTOMIZE => (icons::PALETTE, "Customize", customize_summary(cfg)),
-                    _ => (icons::SLIDERS_HORIZONTAL, "Advanced", advanced_summary(cfg)),
+                    CUSTOMIZE => (icons::PALETTE, nook_ui::i18n::tr("Customize"), customize_summary(cfg)),
+                    _ => (icons::SLIDERS_HORIZONTAL, nook_ui::i18n::tr("Advanced"), advanced_summary(cfg)),
                 };
-                if widgets::disclosure_header(ui, head, glyph, title, &summary, t, theme).clicked()
+                if widgets::disclosure_header(ui, head, glyph, &title, &summary, t, theme).clicked()
                 {
                     let next = (open != Some(section)).then_some(section);
                     set_open_section(&ctx, next);
@@ -392,7 +403,7 @@ pub fn page(
 
 /// Right end of the header: the running version of Nook Enhanced Edition.
 fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, _status: &Status, _out: &mut PageOutput) {
-    let version = format!("Nook Enhanced v{}", update::CURRENT);
+    let version = format!("{} v{}", nook_ui::i18n::tr("Nook Enhanced"), update::CURRENT);
     let font = Theme::font_semibold(SIZE_LABEL);
     ui.painter().text(
         pos2(header.max.x - 4.0, header.center().y),
@@ -405,29 +416,32 @@ fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, _status: &Status, _ou
 
 /// One line beside the Customize title while it is collapsed.
 fn customize_summary(cfg: &Config) -> String {
+    let tr = nook_ui::i18n::tr;
     let material = match cfg.material {
-        Material::Acrylic => format!("Glass {}%", cfg.glass_opacity),
-        Material::LiquidGlass => format!("Liquid Glass {}%", cfg.glass_opacity),
-        Material::Solid => "Solid".to_owned(),
+        Material::Acrylic => format!("{} {}%", tr("Glass"), cfg.glass_opacity),
+        Material::LiquidGlass => format!("{} {}%", tr("Liquid Glass"), cfg.glass_opacity),
+        Material::Solid => tr("Solid"),
     };
     let tint = if parse_hex(&cfg.background_hex).is_some() {
-        "tinted"
+        tr("tinted")
     } else {
-        "neutral"
+        tr("neutral")
     };
     let grain = if cfg.grain == 0 {
-        "no grain".to_owned()
+        tr("no grain")
     } else {
-        format!("grain {}%", cfg.grain)
+        format!("{} {}%", tr("grain"), cfg.grain)
     };
     format!("{material} · {tint} · {grain}")
 }
 
 fn advanced_summary(cfg: &Config) -> String {
-    let on = |b: bool| if b { "on" } else { "off" };
+    let tr = nook_ui::i18n::tr;
+    let on_str = if cfg.plugin_dev { tr("on") } else { tr("off") };
     format!(
-        "Dev mode {} · {}",
-        on(cfg.plugin_dev),
+        "{} {} · {}",
+        tr("Dev mode"),
+        on_str,
         crate::diag::active_renderer()
     )
 }
@@ -543,10 +557,11 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
         pos2(reset_row.max.x - 120.0, reset_row.center().y - 13.0),
         vec2(120.0, 26.0),
     );
+    let reset_text = nook_ui::i18n::tr("Reset style");
     if nook_modules::kit::button(
         ui,
         reset,
-        "Reset style",
+        &reset_text,
         Some(icons::ARROW_COUNTER_CLOCKWISE),
         false,
         theme,
@@ -562,7 +577,7 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
         ui.painter().text(
             pos2(note.min.x, note.center().y),
             Align2::LEFT_CENTER,
-            "Windows transparency is off",
+            nook_ui::i18n::tr("Windows transparency is off"),
             Theme::font(SIZE_LABEL),
             theme.text_dim,
         );
@@ -570,7 +585,8 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
             pos2(note.max.x - 96.0, note.center().y - 13.0),
             vec2(96.0, 26.0),
         );
-        if nook_modules::kit::button(ui, turn_on, "Turn on", Some(icons::ARROW_SQUARE_OUT), false, theme)
+        let turn_label = nook_ui::i18n::tr("Turn on");
+        if nook_modules::kit::button(ui, turn_on, &turn_label, Some(icons::ARROW_SQUARE_OUT), false, theme)
             .on_hover_text(
                 "Glass and opacity need Transparency effects in Windows Settings > Personalization > Colors",
             )
@@ -600,10 +616,11 @@ fn manage_plugins_button(ui: &mut Ui, head: Rect, theme: &Theme, out: &mut PageO
         pos2(head.max.x - 44.0 - 132.0, head.center().y - 13.0),
         vec2(132.0, 26.0),
     );
+    let manage_label = nook_ui::i18n::tr("Manage plugins");
     if nook_modules::kit::button(
         ui,
         manage,
-        "Manage plugins",
+        &manage_label,
         Some(icons::PUZZLE_PIECE),
         false,
         theme,
@@ -666,7 +683,8 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
         pos2(log_row.max.x - 120.0, log_row.center().y - 13.0),
         vec2(120.0, 26.0),
     );
-    if nook_modules::kit::button(ui, open_log, "Open log", Some(icons::FILE_TEXT), false, theme)
+    let open_label = nook_ui::i18n::tr("Open log");
+    if nook_modules::kit::button(ui, open_log, &open_label, Some(icons::FILE_TEXT), false, theme)
         .on_hover_text("Shows nook.log in Explorer, to attach to a bug report")
         .clicked()
         && let Some(path) = crate::diag::log_path()
@@ -679,7 +697,7 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
 /// Small faint line under a row.
 fn hint(ui: &mut Ui, text: &str, theme: &Theme) {
     ui.label(
-        egui::RichText::new(text)
+        egui::RichText::new(nook_ui::i18n::tr(text))
             .font(Theme::font(SIZE_LABEL - 1.0))
             .color(theme.text_faint),
     );
@@ -695,7 +713,7 @@ fn card_ui(ui: &mut Ui, rect: Rect) -> Ui {
 
 fn section_title(ui: &mut Ui, text: &str, theme: &Theme) {
     ui.label(
-        egui::RichText::new(text.to_uppercase())
+        egui::RichText::new(nook_ui::i18n::tr(text))
             .font(Theme::font_semibold(SIZE_LABEL - 1.0))
             .color(theme.text_faint),
     );
@@ -711,10 +729,11 @@ fn row(
 ) -> bool {
     let w = ui.available_width();
     let (rect, _) = ui.allocate_exact_size(vec2(w, ROW), Sense::hover());
+    let translated = nook_ui::i18n::tr(label);
     ui.painter().text(
         pos2(rect.min.x, rect.center().y),
         Align2::LEFT_CENTER,
-        label,
+        translated,
         Theme::font(SIZE_BODY),
         theme.text,
     );

@@ -135,6 +135,7 @@ impl NookApp {
     ) -> Result<Self> {
         let ctx = cc.egui_ctx.clone();
         theme::install_fonts(&ctx);
+        nook_ui::i18n::set_language(cfg.language);
         log_gpu(cc);
 
         let hwnd = match cc.window_handle().context("window handle")?.as_raw() {
@@ -1396,7 +1397,7 @@ impl eframe::App for NookApp {
                 }
                 Page::Module(id) => {
                     if let Some(m) = registry.get_mut(id) {
-                        let title = m.name().to_owned();
+                        let title = nook_ui::i18n::tr(m.name());
                         let mut close = false;
                         let page_out = nook_ui::page::show(
                             ui,

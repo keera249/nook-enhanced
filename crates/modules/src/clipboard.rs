@@ -247,7 +247,7 @@ impl Module for Clipboard {
             icons::ARROWS_OUT_SIMPLE,
             theme,
         )
-        .on_hover_text("Show all")
+        .on_hover_text(nook_ui::i18n::tr("Show all"))
         .clicked()
         {
             self.open_page = true;
@@ -257,7 +257,7 @@ impl Module for Clipboard {
             ui.painter().text(
                 rect.center() + vec2(0.0, 10.0),
                 Align2::CENTER_CENTER,
-                "Copy something",
+                nook_ui::i18n::tr("Copy something"),
                 Theme::font(SIZE_LABEL),
                 theme.text_faint,
             );
@@ -339,7 +339,7 @@ impl Module for Clipboard {
         let now = ui.input(|i| i.time);
         if !self.history.entries.is_empty()
             && widgets::icon_button(header, icons::TRASH, 26.0, false, theme)
-                .on_hover_text("Clear history")
+                .on_hover_text(nook_ui::i18n::tr("Clear history"))
                 .clicked()
         {
             self.history.entries.clear();
@@ -349,7 +349,7 @@ impl Module for Clipboard {
             ui.painter().text(
                 body.center(),
                 Align2::CENTER_CENTER,
-                "Nothing copied yet. Text and images you copy show up here.",
+                nook_ui::i18n::tr("Nothing copied yet. Text and images you copy show up here."),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
             );
@@ -420,11 +420,11 @@ impl Module for Clipboard {
                                 image(ui, fit(area, img.thumb_size), tex, 4.0);
                                 format!("{}×{}", img.width, img.height)
                             }
-                            None => "Image".into(),
+                            None => nook_ui::i18n::tr("Image"),
                         },
                     };
                     let (footer, color) = if copied {
-                        ("Copied".to_owned(), theme.accent_fg())
+                        (nook_ui::i18n::tr("Copied"), theme.accent_fg())
                     } else {
                         (format!("{label} · {}", age(entry.at)), theme.text_faint)
                     };
@@ -443,7 +443,7 @@ impl Module for Clipboard {
                             icons::X,
                             theme,
                         )
-                        .on_hover_text("Remove")
+                        .on_hover_text(nook_ui::i18n::tr("Remove"))
                         .clicked()
                     {
                         delete = Some(id);
