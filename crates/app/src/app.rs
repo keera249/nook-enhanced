@@ -1425,6 +1425,9 @@ impl eframe::App for NookApp {
             self.stats.tool(id);
         }
         self.stats.panel(self.shell.state.is_open());
+        if grid_out.quit || settings_out.quit {
+            ctx.send_viewport_cmd(egui::ViewportCommand::Close);
+        }
         if clicked == Some(SETTINGS_ID) {
             self.page = Page::Settings;
         }

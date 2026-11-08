@@ -51,6 +51,8 @@ pub struct BentoOutput {
     pub edits: Vec<Edit>,
     /// The pencil (or the Done check) was clicked.
     pub toggle_edit: bool,
+    /// The quit button was clicked.
+    pub quit: bool,
 }
 
 /// Grid origin within a panel rect.
@@ -284,6 +286,28 @@ pub fn show(
             .clicked()
         {
             out.toggle_edit = true;
+        }
+    }
+    if !editing {
+        let c = pos2(grid.min.x + 30.0, gutter_y);
+        let hit = Rect::from_center_size(c, vec2(22.0, 18.0));
+        let resp = ui.interact(hit, Id::new("nook-bento-quit"), Sense::click());
+        let color = if resp.hovered() {
+            Color32::from_rgb(239, 68, 68)
+        } else {
+            theme.text_faint
+        };
+        paint::icon(
+            ui.painter(),
+            c,
+            icons::POWER,
+            13.0,
+            with_alpha(color, cctx.alpha),
+            false,
+        );
+        let quit_tip = crate::i18n::tr("Quit Nook");
+        if resp.on_hover_text(quit_tip).clicked() {
+            out.quit = true;
         }
     }
     if pages.len() > 1 {

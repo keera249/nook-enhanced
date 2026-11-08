@@ -143,6 +143,8 @@ pub struct PageOutput {
     pub check_update: bool,
     /// The Update button was clicked.
     pub install_update: bool,
+    /// "Quit Nook" was clicked.
+    pub quit: bool,
 }
 
 /// The settings page, laid out in the expanded panel.
@@ -401,12 +403,21 @@ pub fn page(
     out
 }
 
-/// Right end of the header: the running version of Nook Enhanced Edition.
-fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, _status: &Status, _out: &mut PageOutput) {
+/// Right end of the header: the running version and a quit button.
+fn update_header(ui: &mut Ui, header: Rect, theme: &Theme, _status: &Status, out: &mut PageOutput) {
+    let quit_rect = Rect::from_center_size(pos2(header.max.x - 12.0, header.center().y), vec2(24.0, 24.0));
+    let quit_resp = ui.interact(quit_rect, Id::new("settings-quit-btn"), Sense::click());
+    let qh = nook_ui::anim::tween(ui.ctx(), Id::new("settings-quit-h"), quit_resp.hovered(), 0.12);
+    let q_color = nook_ui::theme::mix(theme.text_faint, Color32::from_rgb(239, 68, 68), qh);
+    paint::icon(ui.painter(), quit_rect.center(), icons::POWER, 15.0, q_color, false);
+    if quit_resp.on_hover_text(nook_ui::i18n::tr("Quit Nook")).clicked() {
+        out.quit = true;
+    }
+
     let version = format!("{} v{}", nook_ui::i18n::tr("Nook Enhanced"), update::CURRENT);
     let font = Theme::font_semibold(SIZE_LABEL);
     ui.painter().text(
-        pos2(header.max.x - 4.0, header.center().y),
+        pos2(header.max.x - 30.0, header.center().y),
         Align2::RIGHT_CENTER,
         version,
         font,
@@ -691,6 +702,19 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
         && let Err(e) = nook_platform::shell::reveal(&path)
     {
         tracing::warn!("revealing log: {e}");
+    }
+
+    let (quit_row, _) = rui.allocate_exact_size(vec2(w, ROW), Sense::hover());
+    let quit_rect = Rect::from_min_size(
+        pos2(quit_row.max.x - 120.0, quit_row.center().y - 13.0),
+        vec2(120.0, 26.0),
+    );
+    let quit_label = nook_ui::i18n::tr("Quit Nook");
+    if nook_modules::kit::button(ui, quit_rect, &quit_label, Some(icons::POWER), false, theme)
+        .on_hover_text(nook_ui::i18n::tr("Quit Nook"))
+        .clicked()
+    {
+        out.quit = true;
     }
 }
 
