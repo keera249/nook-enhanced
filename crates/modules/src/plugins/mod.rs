@@ -10,6 +10,7 @@
 //!
 //! See `docs/plugins.html` for the guide and `examples/plugins` for samples.
 
+pub mod bundled;
 mod examples;
 mod host;
 mod icon_names;
@@ -81,6 +82,7 @@ pub fn dev_mode() -> bool {
 
 /// Finds plugins in the usual folders and registers each as a module.
 pub fn register(reg: &mut Registry) {
+    bundled::ensure_installed();
     let dirs = manifest::search_dirs();
     let found = manifest::discover(&dirs);
     if found.is_empty() {

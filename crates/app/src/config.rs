@@ -148,6 +148,14 @@ pub struct Config {
 
 impl Default for Config {
     fn default() -> Self {
+        let mut sizes = std::collections::BTreeMap::new();
+        sizes.insert("plugin:prayer-times".to_string(), TileSize::Small);
+        sizes.insert("plugin:game-launcher".to_string(), TileSize::Wide);
+        sizes.insert("plugin:volume-mixer".to_string(), TileSize::Small);
+        sizes.insert("plugin:dawwar".to_string(), TileSize::Wide);
+        sizes.insert("plugin:power-mode".to_string(), TileSize::Small);
+        sizes.insert("quick_launch".to_string(), TileSize::Wide);
+
         Self {
             theme: ThemeMode::Auto,
             accent: AccentSource::Wallpaper,
@@ -159,11 +167,11 @@ impl Default for Config {
             grain: DEFAULT_GRAIN,
             grain_size: GrainSize::Fine,
             placement: Placement::Center,
-            notch_shape: NotchShape::Island,
+            notch_shape: NotchShape::Notch,
             on_top: true,
             hide_in_fullscreen: false,
             mini_in_fullscreen: true,
-            notch_width: 180,
+            notch_width: 200,
             hover_delay_ms: 120,
             collapse_grace_ms: 250,
             launch_at_startup: false,
@@ -179,7 +187,7 @@ impl Default for Config {
                     .map(|s| (*s).to_owned())
                     .collect(),
                 disabled: Vec::new(),
-                sizes: Default::default(),
+                sizes,
             },
         }
     }

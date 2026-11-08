@@ -109,6 +109,11 @@ pub fn search_dirs() -> Vec<PathBuf> {
         .and_then(|p| p.parent().map(Path::to_path_buf))
     {
         dirs.push(exe_dir.join("plugins"));
+        // Development / Cargo run support (target/release/../../plugins)
+        dirs.push(exe_dir.join("..").join("..").join("plugins"));
+    }
+    if let Ok(cwd) = std::env::current_dir() {
+        dirs.push(cwd.join("plugins"));
     }
     if let Some(extra) = std::env::var_os("NOOK_PLUGIN_PATH") {
         dirs.extend(std::env::split_paths(&extra));
