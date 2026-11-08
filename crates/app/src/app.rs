@@ -202,9 +202,16 @@ impl NookApp {
             }
         };
 
-        // Keep config and the Run key in agreement (the key is the truth).
+        // Keep config and the Run key in agreement, and always refresh the Run
+        // key path to the currently running nook.exe so stale installs never hijack startup.
         let mut cfg = cfg;
-        cfg.launch_at_startup = startup::is_enabled();
+        let new_install = !stats::valid_id(&cfg.install_id);
+        if startup::is_enabled() || (new_install && cfg.launch_at_startup) {
+            let _ = startup::set_enabled(true);
+            cfg.launch_at_startup = true;
+        } else {
+            cfg.launch_at_startup = startup::is_enabled();
+        }
 
         let timings = timings(&cfg);
         let mut shell = Shell::new(ShellMetrics::default(), timings);

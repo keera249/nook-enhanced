@@ -42,6 +42,7 @@ public static class PrayerStdinReader
     private static ConcurrentQueue<string> _queue = new ConcurrentQueue<string>();
     private static Thread _thread;
     private static bool _started = false;
+    public static volatile bool IsClosed = false;
 
     public static void Start()
     {
@@ -49,11 +50,16 @@ public static class PrayerStdinReader
         _started = true;
         _thread = new Thread(() =>
         {
-            string line;
-            while ((line = Console.ReadLine()) != null)
+            try
             {
-                _queue.Enqueue(line);
+                string line;
+                while ((line = Console.ReadLine()) != null)
+                {
+                    _queue.Enqueue(line);
+                }
             }
+            catch {}
+            IsClosed = true;
         });
         _thread.IsBackground = true;
         _thread.Start();
@@ -465,6 +471,9 @@ function Format-12h([string]$hhmm) {
 function Get-PrayerScheduleState {
     $settings = Load-Settings
     $loc = Get-UserLocation
+    if ([PrayerStdinReader]::IsClosed) {
+        exit 0
+    }
     $now = Get-Date
 
     $todayTimings = Get-DailyTimings $loc $settings.CalcMethod $now
@@ -1113,6 +1122,9 @@ function Build-PageView {
 }
 
 function Update-NotchBadge {
+    if ([PrayerStdinReader]::IsClosed) {
+        exit 0
+    }
     $now = Get-Date
     $settings = Load-Settings
 
@@ -1377,6 +1389,9 @@ while ($true) {
         }
     }
 
+    if ([PrayerStdinReader]::IsClosed) {
+        exit 0
+    }
     $now = Get-Date
 
     # Periodic Athkar check

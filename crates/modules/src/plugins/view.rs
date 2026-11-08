@@ -200,7 +200,7 @@ impl Renderer<'_> {
             }
         }
         match &node.tooltip {
-            Some(t) if !t.is_empty() => resp.on_hover_text(nook_ui::arabic::shape_bidi(t)),
+            Some(t) if !t.is_empty() => resp.on_hover_text(nook_ui::i18n::tr(t)),
             _ => resp,
         }
     }
@@ -262,7 +262,7 @@ impl Renderer<'_> {
                 wrap,
                 mono,
             } => {
-                let rich = RichText::new(nook_ui::arabic::shape_bidi(text))
+                let rich = RichText::new(nook_ui::i18n::tr(text))
                     .font(text_font(*size, *bold, *mono))
                     .color(color(c.as_deref(), theme.text, theme));
                 let label = egui::Label::new(rich).selectable(false);
@@ -418,7 +418,7 @@ impl Renderer<'_> {
                     .horizontal(|ui| {
                         if let Some(l) = label {
                             ui.label(
-                                RichText::new(nook_ui::arabic::shape_bidi(l))
+                                RichText::new(nook_ui::i18n::tr(l))
                                     .font(Theme::font(SIZE_BODY))
                                     .color(theme.text),
                             );
@@ -510,7 +510,7 @@ impl Renderer<'_> {
                     .horizontal(|ui| {
                         ui.spacing_mut().item_spacing.x = 6.0;
                         for (i, o) in options.iter().enumerate() {
-                            let shaped = nook_ui::arabic::shape_bidi(o);
+                            let shaped = nook_ui::i18n::tr(o);
                             let w = ui
                                 .painter()
                                 .layout_no_wrap(shaped, font.clone(), theme.text)
@@ -746,7 +746,7 @@ impl Renderer<'_> {
             ui.allocate_rect(r.rect, Sense::hover());
             r
         } else {
-            let shaped = nook_ui::arabic::shape_bidi(label);
+            let shaped = nook_ui::i18n::tr(label);
             let text_w = ui
                 .painter()
                 .layout_no_wrap(

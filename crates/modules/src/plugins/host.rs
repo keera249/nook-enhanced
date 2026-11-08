@@ -73,6 +73,12 @@ fn command(found: &Found, data_dir: &Path, dark: bool, accent: &str) -> Command 
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .creation_flags(CREATE_NO_WINDOW);
+    if let Some(exe_dir) = std::env::current_exe()
+        .ok()
+        .and_then(|p| p.parent().map(Path::to_path_buf))
+    {
+        cmd.env("NOOK_EXE_DIR", exe_dir);
+    }
     cmd
 }
 

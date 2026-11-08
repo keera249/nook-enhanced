@@ -68,6 +68,7 @@ function Send-Message([hashtable]$Obj) {
 
 function Get-DawwarExecutable {
     $candidates = @(
+        (if ($env:NOOK_EXE_DIR) { Join-Path $env:NOOK_EXE_DIR 'Dawwar.exe' }),
         (Join-Path $PSScriptRoot 'Dawwar.exe'),
         (Join-Path $env:LOCALAPPDATA 'Programs\Nook\Dawwar.exe'),
         'c:\Games\New folder\Dawwar.exe',

@@ -1,7 +1,7 @@
 id          = "game-launcher"
 name        = "Game Launcher"
 icon        = "game-controller"
-size        = "small"
+size        = "wide"
 run         = ["powershell.exe", "-NoProfile", "-NonInteractive", "-ExecutionPolicy", "Bypass", "-File", "launcher.ps1"]
 accepts_files = true
 page_size   = [596, 340]

@@ -46,7 +46,7 @@ function Read-PlacementFrac {
 # ---------------------------------------------------------------- state ----
 
 $script:Games = [System.Collections.Generic.List[object]]::new()
-$script:TileSize = 'large'
+$script:TileSize = 'wide'
 $script:PageWidth = 564
 $script:PageHeight = 268
 $script:InputN = 1

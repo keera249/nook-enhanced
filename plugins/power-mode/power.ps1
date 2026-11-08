@@ -28,7 +28,7 @@ $GuidSaver    = [Guid]'961cc777-2547-4f9d-8174-7d86181b8a7a'
 $GuidBalanced = [Guid]'00000000-0000-0000-0000-000000000000'
 $GuidPerf     = [Guid]'ded574b5-45a0-4f42-8737-46345c09c238'
 
-$script:TileSize = 'wide'
+$script:TileSize = 'small'
 $script:OverlayMode = 1   # 0 = Power Saver, 1 = Balanced, 2 = Best Performance
 $script:Plans = @()
 $script:Status = $null

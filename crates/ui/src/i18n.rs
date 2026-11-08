@@ -50,7 +50,7 @@ pub fn is_arabic() -> bool {
 /// Translates a key string into the active language, applying Arabic shaping if needed.
 pub fn tr(key: &str) -> String {
     if !is_arabic() {
-        return key.to_owned();
+        return shape_bidi(key);
     }
     let ar = translate_ar(key);
     shape_bidi(ar)
@@ -81,10 +81,35 @@ pub fn translate_ar(key: &str) -> &str {
         "System Monitor" => "مراقب النظام",
         "System monitor" => "مراقب النظام",
         "Quick Launch" => "تشغيل سريع",
+        "Quick Launch 2" => "تشغيل سريع ٢",
         "QR Code" => "رمز الاستجابة",
         "Voice Memo" => "مذكرات صوتية",
         "Voice memo" => "مذكرات صوتية",
         "Plugins" => "الإضافات",
+        "Prayer Times" => "مواقيت الصلاة",
+        "Game Launcher" => "مشغل الألعاب",
+        "App Volume Mixer" => "موازن الصوت",
+        "Power & Performance" => "الطاقة والأداء",
+        "Dawwar" => "دوّار",
+        "Master Volume" => "الصوت الرئيسي",
+        "Muted" => "مكتوم",
+        "Mute / Unmute Master" => "كتم / إلغاء كتم الصوت",
+        "Toggle Master Mute" => "كتم الصوت الرئيسي",
+        "Power Mode" => "وضع الطاقة",
+        "Power Saver" => "موفر الطاقة",
+        "Balanced" => "متوازن",
+        "Best Performance" => "أفضل أداء",
+        "Windows Performance Mode" => "وضع أداء ويندوز",
+        "Turbo ON" => "التيربو مفعل",
+        "Boost Now" => "تعزيز الأداء",
+        "Active" => "نشط",
+        "Auto with Nook" => "تلقائي مع نووك",
+        "Dawwar App" => "تطبيق دوّار",
+        "Appearance & Wheel" => "المظهر والعجلة",
+        "AI & Speech" => "الذكاء الاصطناعي والصوت",
+        "Quick Convert & Guide" => "تحويل سريع ودليل",
+        "Shift | Ctrl | Space | Alt" => "Shift | Ctrl | Space | Alt (عجلة دوّار)",
+        "File Converter and Radial AI Wheel" => "محول الملفات وعجلة الذكاء الاصطناعي",
         "INSTALLED" => "المثبتة",
         "Install" => "تثبيت",
         "Cancel" => "إلغاء",

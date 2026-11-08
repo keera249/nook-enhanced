@@ -16,7 +16,7 @@ New-Item -ItemType Directory -Force -Path $IconDir | Out-Null
 
 Add-Type -Path (Join-Path $PluginDir 'AudioMixer.cs') -ReferencedAssemblies System.Drawing
 
-$script:TileSize = 'wide'
+$script:TileSize = 'small'
 $script:Apps = @()
 $script:MasterVol = 100
 $script:MasterMuted = $false

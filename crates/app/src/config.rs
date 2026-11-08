@@ -33,9 +33,9 @@ pub enum MonitorMode {
 #[serde(rename_all = "lowercase")]
 pub enum Material {
     /// Blurred acrylic backdrop where supported.
-    #[default]
     Acrylic,
     /// Liquid Glass: High-transparency fluid refractive glass with caustic specular highlights.
+    #[default]
     #[serde(rename = "liquid_glass", alias = "liquid", alias = "liquidglass")]
     LiquidGlass,
     /// Opaque glass, no backdrop blur.
@@ -46,9 +46,9 @@ pub enum Material {
 #[serde(rename_all = "lowercase")]
 pub enum NotchShape {
     /// Floating Dynamic Island pill with a small top gap.
-    #[default]
     Island,
     /// Hardware notch flush against the top edge of the screen.
+    #[default]
     Notch,
 }
 
@@ -158,17 +158,18 @@ impl Default for Config {
         sizes.insert("plugin:dawwar".to_string(), TileSize::Wide);
         sizes.insert("plugin:power-mode".to_string(), TileSize::Small);
         sizes.insert("quick_launch".to_string(), TileSize::Wide);
+        sizes.insert("quick_launch_2".to_string(), TileSize::Large);
 
         Self {
-            theme: ThemeMode::Auto,
+            theme: ThemeMode::Dark,
             accent: AccentSource::Wallpaper,
             accent_hex: "#7C5CFF".into(),
             monitor: MonitorMode::Primary,
-            material: Material::Acrylic,
+            material: Material::LiquidGlass,
             glass_opacity: DEFAULT_GLASS_OPACITY,
             background_hex: String::new(),
             grain: DEFAULT_GRAIN,
-            grain_size: GrainSize::Fine,
+            grain_size: GrainSize::Medium,
             placement: Placement::Center,
             language: Language::Arabic,
             notch_shape: NotchShape::Notch,
@@ -178,7 +179,7 @@ impl Default for Config {
             notch_width: 200,
             hover_delay_ms: 120,
             collapse_grace_ms: 250,
-            launch_at_startup: false,
+            launch_at_startup: true,
             toggle_hotkey: "ctrl+alt+N".into(),
             plugin_dev: false,
             check_updates: false,
@@ -198,13 +199,82 @@ impl Default for Config {
 }
 
 fn default_notch_width() -> u32 {
-    180
+    200
 }
 
-pub const DEFAULT_GLASS_OPACITY: u8 = 70;
-pub const DEFAULT_GRAIN: u8 = 35;
+pub const DEFAULT_GLASS_OPACITY: u8 = 40;
+pub const DEFAULT_GRAIN: u8 = 0;
+
+pub const BUNDLED_PLUGIN_SIZES: &[(&str, TileSize)] = &[
+    ("plugin:prayer-times", TileSize::Small),
+    ("plugin:game-launcher", TileSize::Wide),
+    ("plugin:volume-mixer", TileSize::Small),
+    ("plugin:dawwar", TileSize::Wide),
+    ("plugin:power-mode", TileSize::Small),
+];
 
 impl Config {
+    /// Ensures that any older/vanilla `config.toml` on disk is automatically
+    /// upgraded with the 5 bundled plugins on Page 1, their default tile sizes,
+    /// and Liquid Glass styling if it was stuck on vanilla defaults.
+    pub fn ensure_enhanced_defaults(&mut self) -> bool {
+        let mut changed = false;
+
+        let missing_bundled = BUNDLED_PLUGIN_SIZES
+            .iter()
+            .any(|(id, _)| !self.modules.order.iter().any(|o| o == id));
+
+        if missing_bundled {
+            let mut new_order: Vec<String> = nook_modules::DEFAULT_ORDER
+                .iter()
+                .map(|s| (*s).to_owned())
+                .collect();
+            for existing in &self.modules.order {
+                if !new_order.contains(existing) {
+                    new_order.push(existing.clone());
+                }
+            }
+            self.modules.order = new_order;
+            self.modules
+                .disabled
+                .retain(|d| !BUNDLED_PLUGIN_SIZES.iter().any(|(id, _)| d == id));
+
+            // If this config had the old vanilla look signature, upgrade to Liquid Glass.
+            if self.material == Material::Acrylic && self.glass_opacity == 70 && self.grain == 35 {
+                self.theme = ThemeMode::Dark;
+                self.material = Material::LiquidGlass;
+                self.glass_opacity = DEFAULT_GLASS_OPACITY;
+                self.grain = DEFAULT_GRAIN;
+                self.grain_size = GrainSize::Medium;
+                self.notch_shape = NotchShape::Notch;
+                self.notch_width = 200;
+                self.mini_in_fullscreen = true;
+            }
+            changed = true;
+        }
+
+        for &(id, size) in BUNDLED_PLUGIN_SIZES {
+            if !self.modules.sizes.contains_key(id) {
+                self.modules.sizes.insert(id.to_owned(), size);
+                changed = true;
+            }
+        }
+        if !self.modules.sizes.contains_key("quick_launch") {
+            self.modules
+                .sizes
+                .insert("quick_launch".to_owned(), TileSize::Wide);
+            changed = true;
+        }
+        if !self.modules.sizes.contains_key("quick_launch_2") {
+            self.modules
+                .sizes
+                .insert("quick_launch_2".to_owned(), TileSize::Large);
+            changed = true;
+        }
+
+        changed
+    }
+
     /// The styling settings as the theme takes them.
     pub fn look(&self) -> Look {
         Look {
@@ -243,7 +313,12 @@ impl Config {
         let path = path()?;
         match std::fs::read_to_string(&path) {
             Ok(text) => match toml::from_str::<Config>(&text) {
-                Ok(cfg) => Ok(cfg),
+                Ok(mut cfg) => {
+                    if cfg.ensure_enhanced_defaults() {
+                        let _ = cfg.save();
+                    }
+                    Ok(cfg)
+                }
                 Err(e) => {
                     tracing::error!("config parse error, using defaults: {e}");
                     let _ = std::fs::rename(&path, path.with_extension("toml.bad"));
