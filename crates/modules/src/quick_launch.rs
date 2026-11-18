@@ -124,28 +124,45 @@ fn name_for(target: &str) -> String {
 }
 
 fn defaults() -> Vec<Item> {
-    let mut items = vec![Item::new(
-        "Explorer",
-        windir().join("explorer.exe").display().to_string(),
-    )];
-    if let Some(d) = shell::downloads_dir() {
-        items.push(Item::new("Downloads", d.display().to_string()));
+    #[cfg(target_os = "linux")]
+    {
+        let mut items = Vec::new();
+        if let Some(h) = std::env::var_os("HOME") {
+            items.push(Item::new("Files", PathBuf::from(h).display().to_string()));
+        }
+        if let Some(d) = shell::downloads_dir() {
+            items.push(Item::new("Downloads", d.display().to_string()));
+        }
+        items.push(Item::new("Terminal", "x-terminal-emulator"));
+        items.push(Item::new("System Monitor", "gnome-system-monitor"));
+        items.push(Item::new("Browser", "xdg-open https://"));
+        return items;
     }
-    items.push(Item::new("Settings", "ms-settings:"));
-    items.push(Item::new("Task Manager", "taskmgr.exe"));
-    let wt = std::env::var_os("LOCALAPPDATA").map(|a| {
-        PathBuf::from(a)
-            .join("Microsoft")
-            .join("WindowsApps")
-            .join("wt.exe")
-    });
-    if wt.is_some_and(|p| p.exists()) {
-        items.push(Item::new("Terminal", "wt.exe"));
-    } else {
-        items.push(Item::new("Terminal", "cmd.exe"));
+    #[cfg(not(target_os = "linux"))]
+    {
+        let mut items = vec![Item::new(
+            "Explorer",
+            windir().join("explorer.exe").display().to_string(),
+        )];
+        if let Some(d) = shell::downloads_dir() {
+            items.push(Item::new("Downloads", d.display().to_string()));
+        }
+        items.push(Item::new("Settings", "ms-settings:"));
+        items.push(Item::new("Task Manager", "taskmgr.exe"));
+        let wt = std::env::var_os("LOCALAPPDATA").map(|a| {
+            PathBuf::from(a)
+                .join("Microsoft")
+                .join("WindowsApps")
+                .join("wt.exe")
+        });
+        if wt.is_some_and(|p| p.exists()) {
+            items.push(Item::new("Terminal", "wt.exe"));
+        } else {
+            items.push(Item::new("Terminal", "cmd.exe"));
+        }
+        items.push(Item::new("Notepad", "notepad.exe"));
+        items
     }
-    items.push(Item::new("Notepad", "notepad.exe"));
-    items
 }
 
 /// A stable color for a name (for lettered badges).
@@ -285,7 +302,9 @@ impl QuickLaunch {
         let name = item.name.clone();
         self.toast = Some((
             match res {
+                Ok(()) if nook_ui::i18n::is_arabic() => format!("جاري فتح {name}"),
                 Ok(()) => format!("Opening {name}"),
+                Err(e) if nook_ui::i18n::is_arabic() => format!("تعذر فتح {name}: {e}"),
                 Err(e) => format!("Could not open {name}: {e}"),
             },
             Instant::now(),
@@ -438,7 +457,7 @@ impl QuickLaunch {
                     c.y,
                     egui::Stroke::new(2.0, Color32::WHITE),
                 );
-                if bresp.on_hover_text("Remove").clicked() {
+                if bresp.on_hover_text(nook_ui::i18n::tr("Remove")).clicked() {
                     remove = Some(i);
                 }
             } else if resp.clicked() {
@@ -663,7 +682,10 @@ impl Module for QuickLaunch {
                     );
                 }
                 draw_icon(ui, r.shrink(2.0 - 2.0 * h), item, theme);
-                if resp.on_hover_text(&item.name).clicked() {
+                if resp
+                    .on_hover_text(nook_ui::arabic::shape_bidi(&item.name))
+                    .clicked()
+                {
                     launch = Some(i);
                 }
             }
@@ -675,7 +697,9 @@ impl Module for QuickLaunch {
             return;
         }
         if kit::tool_tile(ui, ctx, icons::ROCKET_LAUNCH, false)
-            .on_hover_text("Your apps, folders and sites, one click away")
+            .on_hover_text(nook_ui::i18n::tr(
+                "Your apps, folders and sites, one click away",
+            ))
             .clicked()
         {
             self.open_page = true;
@@ -692,9 +716,9 @@ impl Module for QuickLaunch {
         };
         if widgets::icon_button(header, glyph, 26.0, self.editing, theme)
             .on_hover_text(if self.editing {
-                "Done"
+                nook_ui::i18n::tr("Done")
             } else {
-                "Reorder or remove"
+                nook_ui::i18n::tr("Reorder or remove")
             })
             .clicked()
         {
@@ -703,7 +727,7 @@ impl Module for QuickLaunch {
         }
         if self.items.len() > 1
             && widgets::icon_button(header, icons::ARROW_COUNTER_CLOCKWISE, 26.0, false, theme)
-                .on_hover_text("Reset to the starter set")
+                .on_hover_text(nook_ui::i18n::tr("Reset to the starter set"))
                 .clicked()
         {
             self.items = defaults();
@@ -725,13 +749,15 @@ impl Module for QuickLaunch {
         }
         let hint_y = body.max.y - bar_h - 12.0;
         let (hint, color) = match &self.toast {
-            Some((t, at)) if at.elapsed().as_secs_f32() < 3.0 => (t.clone(), theme.accent_fg()),
+            Some((t, at)) if at.elapsed().as_secs_f32() < 3.0 => {
+                (nook_ui::i18n::tr(t), theme.accent_fg())
+            }
             _ if self.editing => (
-                "Drag to reorder  \u{00B7}  the red badge removes".to_owned(),
+                nook_ui::i18n::tr("Drag to reorder  \u{00B7}  the red badge removes"),
                 theme.text_faint,
             ),
             _ => (
-                "Drop files or folders on the notch to add them".to_owned(),
+                nook_ui::i18n::tr("Drop files or folders on the notch to add them"),
                 theme.text_faint,
             ),
         };

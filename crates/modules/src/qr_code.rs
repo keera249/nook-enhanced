@@ -1153,7 +1153,7 @@ impl QrCodeModule {
         let resp = ui
             .interact(img_rect, Id::new("nook-qr-drag"), Sense::click_and_drag())
             .on_hover_cursor(egui::CursorIcon::Grab)
-            .on_hover_text("Drag into any app  \u{00B7}  Click to copy");
+            .on_hover_text(nook_ui::i18n::tr("Drag into any app  \u{00B7}  Click to copy"));
         if resp.drag_started() {
             self.drag_out();
         } else if resp.clicked() {
@@ -1186,7 +1186,7 @@ impl QrCodeModule {
             false,
             theme,
         )
-        .on_hover_text("Paste from the clipboard")
+        .on_hover_text(nook_ui::i18n::tr("Paste from the clipboard"))
         .clicked()
             && let Some(t) = clipboard::read_text()
         {
@@ -1232,7 +1232,7 @@ impl QrCodeModule {
             let hit = Rect::from_center_size(c, vec2(step, 28.0));
             let resp = ui
                 .interact(hit, Id::new(("nook-qr-swatch", i)), Sense::click())
-                .on_hover_text(*name);
+                .on_hover_text(nook_ui::i18n::tr(*name));
             let selected = self.style.palette == i;
             let grow = if resp.hovered() { 1.0 } else { 0.0 };
             if selected {
@@ -1298,7 +1298,7 @@ impl QrCodeModule {
                     false,
                     theme,
                 )
-                .on_hover_text("Remove the logo")
+                .on_hover_text(nook_ui::i18n::tr("Remove the logo"))
                 .clicked()
                 {
                     self.logo = None;
@@ -1314,7 +1314,7 @@ impl QrCodeModule {
                     false,
                     theme,
                 )
-                .on_hover_text("Choose an image, or drop one on the notch")
+                .on_hover_text(nook_ui::i18n::tr("Choose an image, or drop one on the notch"))
                 .clicked()
                 {
                     self.pick_logo();
@@ -1327,7 +1327,7 @@ impl QrCodeModule {
             ui.painter().text(
                 label_r.center(),
                 Align2::CENTER_CENTER,
-                "Labels need a background",
+                nook_ui::i18n::tr("Labels need a background"),
                 Theme::font(SIZE_LABEL),
                 theme.text_faint,
             );
@@ -1347,17 +1347,26 @@ impl QrCodeModule {
         let bottom = col.max.y;
         let buttons = Rect::from_min_max(pos2(col.min.x, bottom - 34.0), pos2(col.max.x, bottom));
         let details = match self.code() {
-            Some(Ok(qr)) => Some(format!(
-                "Version {}  \u{00B7}  {n}\u{00D7}{n} modules  \u{00B7}  error correction {}",
-                qr.version().value(),
-                match qr.error_correction_level() {
+            Some(Ok(qr)) => {
+                let ecc = match qr.error_correction_level() {
                     QrCodeEcc::Low => "L",
                     QrCodeEcc::Medium => "M",
                     QrCodeEcc::Quartile => "Q",
                     QrCodeEcc::High => "H",
-                },
-                n = qr.size()
-            )),
+                };
+                let n = qr.size();
+                if nook_ui::i18n::is_arabic() {
+                    Some(format!(
+                        "الإصدار {}  \u{00B7}  {n}\u{00D7}{n} وحدة  \u{00B7}  تصحيح الخطأ {ecc}",
+                        qr.version().value()
+                    ))
+                } else {
+                    Some(format!(
+                        "Version {}  \u{00B7}  {n}\u{00D7}{n} modules  \u{00B7}  error correction {ecc}",
+                        qr.version().value()
+                    ))
+                }
+            }
             _ => None,
         };
         let info = match (&self.toast, details) {
@@ -1390,13 +1399,13 @@ impl QrCodeModule {
                 self.copy();
             }
             if kit::button(ui, b(1), "PNG", Some(icons::DOWNLOAD_SIMPLE), false, theme)
-                .on_hover_text("Save a 1200 px PNG to Pictures\\QR codes")
+                .on_hover_text(nook_ui::i18n::tr("Save a 1200 px PNG to Pictures\\QR codes"))
                 .clicked()
             {
                 self.save(false);
             }
             if kit::button(ui, b(2), "SVG", Some(icons::BEZIER_CURVE), false, theme)
-                .on_hover_text("Save a vector SVG to Pictures\\QR codes")
+                .on_hover_text(nook_ui::i18n::tr("Save a vector SVG to Pictures\\QR codes"))
                 .clicked()
             {
                 self.save(true);
@@ -1555,7 +1564,9 @@ impl Module for QrCodeModule {
             return;
         }
         if kit::tool_tile(ui, ctx, icons::QR_CODE, false)
-            .on_hover_text("Make a QR code  \u{00B7}  Ctrl+Alt+Q uses the clipboard")
+            .on_hover_text(nook_ui::i18n::tr(
+                "Make a QR code  \u{00B7}  Ctrl+Alt+Q uses the clipboard",
+            ))
             .clicked()
         {
             if self.text.trim().is_empty()
@@ -1573,7 +1584,7 @@ impl Module for QrCodeModule {
         self.style.accent = [a.r(), a.g(), a.b()];
         if !self.text.is_empty()
             && widgets::icon_button(header, icons::ARROW_COUNTER_CLOCKWISE, 26.0, false, theme)
-                .on_hover_text("Start over")
+                .on_hover_text(nook_ui::i18n::tr("Start over"))
                 .clicked()
         {
             self.text.clear();
@@ -1585,7 +1596,7 @@ impl Module for QrCodeModule {
             self.dirty = true;
         }
         if widgets::icon_button(header, icons::FOLDER_OPEN, 26.0, false, theme)
-            .on_hover_text("Open Pictures\\QR codes")
+            .on_hover_text(nook_ui::i18n::tr("Open Pictures\\QR codes"))
             .clicked()
             && let Some(dir) = Self::out_dir()
         {

@@ -253,7 +253,11 @@ impl Module for ColorPicker {
         let resp = self
             .snipper
             .tile(ui, ctx, icons::EYEDROPPER, "color-tile")
-            .on_hover_text("Click to pick  \u{00B7}  Right click for history");
+            .on_hover_text(if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi("انقر للالتقاط  ·  زر أيمن للسجل")
+            } else {
+                "Click to pick  \u{00B7}  Right click for history".to_owned()
+            });
         if resp.clicked() {
             self.start();
         }
@@ -275,13 +279,17 @@ impl Module for ColorPicker {
         }
         if !self.history.is_empty()
             && widgets::icon_button(header, icons::TRASH, 26.0, false, theme)
-                .on_hover_text("Clear history")
+                .on_hover_text(nook_ui::i18n::tr("Clear history"))
                 .clicked()
         {
             self.history.clear();
         }
         if widgets::icon_button(header, icons::EYEDROPPER, 26.0, false, theme)
-            .on_hover_text("Pick a color (Ctrl+Alt+P)")
+            .on_hover_text(if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi("التقاط لون (Ctrl+Alt+P)")
+            } else {
+                "Pick a color (Ctrl+Alt+P)".to_owned()
+            })
             .clicked()
         {
             self.start();
@@ -291,7 +299,11 @@ impl Module for ColorPicker {
             .position(|&f| f == self.format)
             .unwrap_or(0);
         if widgets::segmented(header, &Format::LABELS, &mut selected, theme)
-            .on_hover_text("Format to copy")
+            .on_hover_text(if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi("صيغة النسخ")
+            } else {
+                "Format to copy".to_owned()
+            })
             .changed()
         {
             self.format = Format::ALL[selected];
@@ -301,7 +313,11 @@ impl Module for ColorPicker {
             ui.painter().text(
                 body.center(),
                 Align2::CENTER_CENTER,
-                "No colors yet. Pick one from anywhere on screen.",
+                if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi("لا توجد ألوان بعد. التقط لوناً من أي مكان على الشاشة.")
+                } else {
+                    "No colors yet. Pick one from anywhere on screen.".to_owned()
+                },
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
             );
@@ -383,7 +399,7 @@ impl ColorPicker {
                 ui.painter().text(
                     pos2(inner.min.x + 18.0, label_y),
                     Align2::LEFT_CENTER,
-                    "Copied",
+                    nook_ui::i18n::tr("Copied"),
                     Theme::font(SIZE_LABEL),
                     theme.accent_fg(),
                 );

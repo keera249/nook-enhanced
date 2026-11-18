@@ -1,105 +1,97 @@
-# Nook — Enhanced Dynamic Island Edition for Windows 10/11
+# Nook — Enhanced Dynamic Island Edition (Windows & Linux)
 
-> نسخة مطوّرة ومعدّلة من برنامج **Nook** لتحويل أعلى شاشة الويندوز إلى جزيرة تفاعلية (**Dynamic Island**) على غرار الآيفون، مع **مشغّل ألعاب ذكي (Steam / Epic / GOG)**، **نوتش مصغّر تلقائي للشاشة الكاملة**، **عرض الموسيقى والفيديوهات مباشرة في النوتش العلوي**، **التحكم المستقل في صوت كل تطبيق**، و**أوضاع الطاقة والأداء العالي**.
-
----
-
-## ✨ أبرز المميزات والإضافات الجديدة (What's New)
-
-### 1. 🎵 الجزيرة التفاعلية للموسيقى والفيديوهات (iPhone Dynamic Island Media Pill)
-- عند تشغيل أي مقطع صوتي أو فيديو من **YouTube** (على Chrome / Edge / Brave وغيرها) أو **Spotify** أو أي مشغل في الويندوز:
-  - يتمدد النوتش العلوي المغلق تلقائياً ليعرض:
-    - **على اليسار:** صورة الأغنية أو الفيديو المصغرة (**Album Art / Thumbnail**) بحواف دائرية وإطار مضيء.
-    - **في المنتصف:** اسم المقطع أو الأغنية الحالية.
-    - **على اليمين:** موجات صوتية متحركة (**Animated Waveform Equalizer**) تتفاعل مع التشغيل.
-
-### 2. 📏 النوتش المصغّر التلقائي في الشاشة الكاملة (Auto Mini-Notch in Full Window)
-- **في سطح المكتب أو النوافذ الجزئية:** يظهر النوتش بحجمه الطبيعي (`140×34`).
-- **عند تكبير أي نافذة (Maximized) أو فتح لعبة/تطبيق في الشاشة الكاملة (Fullscreen):** يتقلص النوتش تلقائياً بحركة انسيابية إلى **نوتش صغير جداً (`58×14`)** حتى لا يغطي شريط العنوان أو محتوى التطبيق، ويفتح بالكامل بمجرد تقريب الماوس منه.
-- **خيار قابل للتشغيل والإيقاف:** يمكنك تفعيله أو إيقافه في أي وقت من **Settings $\rightarrow$ Appearance $\rightarrow$ `Mini in full window`**.
-
-### 3. 🎮 مشغّل الألعاب الذكي (Smart Game Launcher Plugin)
-- **اكتشاف تلقائي للألعاب المثبتة:** يكتشف ألعاب **Steam** و **Epic Games** و **GOG Galaxy** المثبتة على جهازك تلقائياً عند التشغيل ويستخرج أيقوناتها الأصلية بدقة عالية.
-- **تشغيل ألعاب Steam و Epic بشكل رسمي:** يشغّل ألعاب Steam عبر بروتوكول `steam://rungameid/<id>` وألعاب Epic عبر مشغلها الرسمي لضمان عمل الـ Overlay والحفظ السحابي (Cloud Saves) بدون أي مشاكل.
-- **إضافة أي لعبة بالسحب والإفلات:** اسحب ملف `.exe` أو اختصار `.lnk` أو **مجلد اللعبة بالكامل** وأفلته داخل النوتش، وسيقوم تلقائياً باكتشاف ملف التشغيل الأساسي واستخراج اسم اللعبة وأيقونتها.
-- **الوصول السريع من الشاشة الخارجية (Outer Tile):**
-  - يعرض المربع الخارجي (في الحجم الكبير `Large`) **أيقونات آخر 6 ألعاب أُضيفت أو لُعبت**.
-  - **ضغطة واحدة على أي أيقونة في الخارج:** تشغّل اللعبة فوراً.
-  - **ضغطة في أي مساحة فارغة داخل المربع:** تفتح مجلد الألعاب المكبّر بالكامل.
-- **قائمة كليك يمين (Right-Click Menu):**
-  - اضغط **كليك يمين** على أي لعبة داخل المشغّل لتغيير أيقونتها (`Change Icon`)، استعادة الأيقونة الأصلية (`Reset Icon`)، إعادة التسمية (`Rename`)، أو الحذف (`Delete`).
-
-### 4. 🚀 نسخة ثانية من الإطلاق السريع (`Quick launch 2`)
-- نسخة ثانية مستقلة ومطابقة تماماً لأداة `Quick launch` الأساسية لترتيب برامجك ومجلداتك ومواقعك المفضلة في قسمين منفصلين.
-
-### 5. 🔊 التحكم المخصص في صوت كل تطبيق (Per-App Volume Mixer Plugin)
-- خافض ورافع صوت مدمج داخل النوتش يعرض **الصوت الرئيسي (Master Volume)** بالإضافة إلى **كل تطبيق مفتوح يصدر صوتاً** (مثل المتصفح، الألعاب، Discord، Spotify) مع أيقونة كل تطبيق للتحكم في مستوى صوته أو كتمه بشكل مستقل.
-
-### 6. ⚡ مبدّل وضع الأداء العالي والطاقة (Power & Performance Mode Switcher Plugin)
-- التبديل بضغطة واحدة بين أوضاع الطاقة في الويندوز:
-  - **Battery Saver / Eco** (توفير الطاقة)
-  - **Balanced** (متوازن)
-  - **Best Performance / Ultimate Performance** (أقصى أداء للألعاب مع تفعيل خطة الأداء الفائق المخفية في الويندوز).
-
-### 7. 🕌 مواقيت الصلاة والأذكار التفاعلية (Prayer Times & Scheduled Athkar)
-- **مواقيت الصلاة الدقيقة:** عداد تنازلي مستمر للصلاة القادمة يظهر كحلقة تقدم وإشعار في النوتش الخارجي.
-- **أذكار دورية مجدولة في النوتش:** إشعارات أذكار تلقائية تظهر على شريط النوتش الخارجي مع إمكانية تحديد الفاصل الزمني (كل 5 دقائق، 15 دقيقة، إلخ).
-- **مسبحة وعداد تفاعلي:** عداد أذكار تفاعلي مع نصوص الأذكار وفضائلها وخط عربي مشكّل بدقة تامة.
-
-### 8. 🎛️ مشغل الميديا الكامل مع شريط التقديم (Full Media Player & Seek Bar)
-- النقر على بطاقة الميديا يفتح صفحة مشغل متكاملة تعرض غلاف الألبوم بدقة عالية (`180x180`).
-- **شريط تقديم وتأخير تفاعلي (Seek Bar):** انقر أو اسحب لتقديم وترجيع الصوت مباشرة في أي تطبيق مشغل (Spotify، يوتيوب، المتصفحات).
-
-### 9. 📐 خيار شكل النوتش (Island vs Notch)
-- الاختيار من **Settings $\rightarrow$ Appearance $\rightarrow$ Shape** بين:
-  - **Island:** جزيرة عائمة تحت الحافة العلوية.
-  - **Notch:** نوتش ملتصق بحافة الشاشة العلوية مع زوايا مسطحة (MacBook Notch).
+A customized and enhanced fork of **Nook** that turns the top of your screen into an interactive **Dynamic Island / Notch**, featuring a **Smart Game Launcher**, **Auto Mini-Notch in Fullscreen**, **Live Media Pill & Seek Bar**, **Per-App Volume Mixer**, **Power & Performance Switcher**, **Prayer Times & Athkar**, **Dawwar File Converter**, and a full suite of desktop utilities.
 
 ---
 
-## 📥 طريقة التثبيت والتشغيل الفوري (Zero-Setup Run)
+## Editions & Branch Separation
 
-> 💡 **تشغيل مباشر دون أي خطوات إضافية:** النسخة مدمج بداخلها كافة الإضافات تلقائياً (Self-Provisioning)، ولن تحتاج لنقل أي ملفات أو تشغيل سكربتات.
+This repository is organized into two platform editions:
 
-### التشغيل الفوري:
-1. ادخل إلى قسم **[Releases](../../releases)** في هذا المستودع وحمّل ملف **`Nook-Enhanced-Edition.zip`** أو **`nook.exe`**.
-2. فك الضغط (إن قمت بتحميل الملف المضغوط) وشغّل **`nook.exe`** مباشرة.
-3. سيعمل البرنامج فوراً في أعلى الشاشة بكامل الميزات والإضافات المدمجة تلقائياً.
-
----
-
-## 🕹️ دليل الاستخدام السريع (How to Use)
-
-| الوظيفة | طريقة الاستخدام |
-|---|---|
-| **فتح النوتش** | حرّك مؤشر الماوس إلى أعلى منتصف الشاشة، أو اضغط الاختصار `Ctrl + Alt + N` |
-| **تثبيت النوتش مفتوحاً (Pin)** | اضغط بالماوس على خلفية النوتش الزجاجية الفارغة |
-| **تعديل أماكن وأحجام الأدوات** | افتح النوتش واضغط على أيقونة **القلم (Edit)** في الأسفل لتغيير حجم أي أداة (`Small` / `Wide` / `Large`) أو ترتيبها بالسحب |
-| **تشغيل لعبة بسرعة** | اضغط كليك يسار مباشرة على أيقونة اللعبة من المربع الخارجي أو من داخل صفحة **Game Launcher** |
-| **تعديل أيقونة لعبة أو حذفها** | افتح **Game Launcher** واضغط **كليك يمين** على أيقونة اللعبة |
-| **إضافة لعبة يدوياً** | افتح **Game Launcher** واسحب ملف الـ `.exe` أو مجلد اللعبة بالكامل وأفلته داخل النوتش |
-| **تغيير شكل النوتش** | افتح **Settings** $\rightarrow$ **Appearance** $\rightarrow$ **Shape** (`Island` أو `Notch`) |
-| **التحكم بالميديا** | انقر على بطاقة الميديا لفتح المشغل الكامل مع شريط التقديم والترجيع |
-| **تفعيل/إيقاف النوتش المصغر** | افتح **Settings** $\rightarrow$ **Appearance** $\rightarrow$ فعّل أو أوقف **`Mini in full window`** |
+| Edition | Branch | Platform Backend | Bundled Plugins |
+|---|---|---|---|
+| **Windows Edition** (Windows 10/11) | `main` / `windows` | DirectX 12 (`wgpu`) + Win32 / WinRT APIs | PowerShell + C# (`*.ps1`, `*.cs`) |
+| **Linux Edition** (X11 & Wayland) | `linux` (also supported on `main`) | OpenGL (`Glow`) / Vulkan + X11 / MPRIS2 / PulseAudio / `/proc` | Python 3 (`*_linux.py`) |
 
 ---
 
-## 🛠️ البناء من الكود المصدري (Building from Source)
+## Core Features
 
-المشروع مبني بلغة **Rust** (`egui` / `eframe` + `DirectX 12` + `Win32 / WinRT APIs`).
+1. **Dynamic Island Media Pill & Full Player**
+   - Displays album art, track title, and animated audio waveform when playing media from Spotify, Chrome, Firefox, VLC, etc.
+   - Click the media card to open the full player with an interactive **Seek Bar**.
+2. **Auto Mini-Notch in Fullscreen / Maximized Windows**
+   - Automatically shrinks to a compact mini-notch (`58x14`) when a window is maximized or fullscreen, and expands on hover. Toggle in **Settings → Appearance → `Mini in full window`**.
+3. **Smart Game Launcher (`game-launcher`)**
+   - **Windows**: Auto-detects Steam, Epic Games, and GOG Galaxy games and supports drag-and-drop for `.exe`, `.lnk`, or game folders.
+   - **Linux**: Auto-detects Steam (`~/.local/share/Steam`) and Lutris games, and supports drag-and-drop for executables or `.desktop` files.
+4. **Per-App Volume Mixer (`volume-mixer`)**
+   - Control master volume and individual app audio streams independently (WASAPI on Windows, `pactl` / PipeWire / PulseAudio on Linux).
+5. **Power & Performance Mode Switcher (`power-mode`)**
+   - One-click switching between **Power Saver**, **Balanced**, and **Performance** modes.
+6. **Prayer Times & Athkar (`prayer-times`)**
+   - Live countdown to the next prayer, scheduled Athkar, and an interactive Tasbih counter.
+7. **Dawwar File Converter (`dawwar`)**
+   - Drag-and-drop file conversion for images, audio, and video.
+8. **Island vs. Notch Shape**
+   - Switch between a floating **Island** or a top-edge **Notch** in **Settings → Appearance → Shape**.
 
+---
+
+## Windows Edition (Windows 10 / 11)
+
+### Quick Run (Zero-Setup)
+1. Download **`Nook-Enhanced-Edition.zip`** or **`nook.exe`** from **[Releases](../../releases)**.
+2. Extract (if zipped) and run **`nook.exe`** directly — all bundled plugins are self-provisioned into `%APPDATA%\Nook\plugins` on first launch.
+
+### Building from Source (Windows)
 ```powershell
-# 1. استنساخ المستودع
 git clone https://github.com/keera249/nook-enhanced.git
 cd nook-enhanced
-
-# 2. تجميع وتشغيل النسخة النهائية مباشرة
 cargo build --release
 .\target\release\nook.exe
 ```
-*(يقوم التطبيق تلقائياً عند أول إقلاع بتجهيز كافة الإضافات فورياً دون أي تدخل)*
 
 ---
 
-## 📄 الرخصة (License)
-مبني على مشروع [Nook](https://github.com/Geguchh024/nook) الأصلي ومرخّص تحت رخصة [MIT License](LICENSE).
+## Linux Edition (X11 & Wayland)
+
+### Quick Install & Build (Linux)
+Switch to the `linux` branch (or use `main`) and run the automated installer script:
+
+```bash
+git clone -b linux https://github.com/keera249/nook-enhanced.git
+cd nook-enhanced
+chmod +x linux/build-and-install.sh
+./linux/build-and-install.sh
+```
+
+The script installs required system dependencies (`playerctl`, `pulseaudio-utils`, `python3`, `xclip`/`wl-clipboard`, `zenity`, `tesseract-ocr`, `ffmpeg`, X11/OpenGL/Wayland dev headers), builds the release binary, installs it to `~/.local/bin/nook`, creates a desktop entry, and launches Nook.
+
+### Manual Build (Linux)
+```bash
+cargo build --release
+# Optional: include system tray support (requires libgtk-3-dev and libayatana-appindicator3-dev)
+cargo build --release --features linux-tray
+./target/release/nook
+```
+
+All bundled Linux plugins (`*_linux.py`) are automatically provisioned into `~/.config/nook/plugins/` on first launch.
+
+---
+
+## Quick Usage Guide
+
+| Action | How to Use |
+|---|---|
+| **Open Notch** | Move cursor to top-center of screen, or press `Ctrl + Alt + N` |
+| **Pin Notch Open** | Click on the empty glass background |
+| **Edit Layout & Tile Sizes** | Open the notch and click the **Edit (Pencil)** icon at the bottom |
+| **Quick-Launch a Game** | Left-click any game icon in the Game Launcher tile or page |
+| **Switch Island / Notch** | **Settings → Appearance → Shape** (`Island` or `Notch`) |
+
+---
+
+## License
+
+Built on [Nook](https://github.com/Geguchh024/nook) and licensed under the [MIT License](LICENSE).

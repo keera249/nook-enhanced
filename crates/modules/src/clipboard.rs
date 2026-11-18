@@ -120,6 +120,14 @@ impl Clipboard {
 /// "now", "5 min", "2 h", "3 d".
 fn age(at: Instant) -> String {
     let s = at.elapsed().as_secs();
+    if nook_ui::i18n::is_arabic() {
+        return match s {
+            0..60 => nook_ui::i18n::tr("now"),
+            60..3600 => nook_ui::arabic::shape_bidi(&format!("{} د", s / 60)),
+            3600..86400 => nook_ui::arabic::shape_bidi(&format!("{} س", s / 3600)),
+            _ => nook_ui::arabic::shape_bidi(&format!("{} ي", s / 86400)),
+        };
+    }
     match s {
         0..60 => "now".into(),
         60..3600 => format!("{} min", s / 60),
@@ -142,7 +150,10 @@ fn text_block(
     font: egui::FontId,
     color: Color32,
 ) {
-    let mut job = LayoutJob::single_section(text.to_owned(), TextFormat::simple(font, color));
+    let mut job = LayoutJob::single_section(
+        nook_ui::arabic::shape_bidi(text),
+        TextFormat::simple(font, color),
+    );
     job.wrap = TextWrapping {
         max_width: width,
         max_rows: rows,
@@ -296,7 +307,7 @@ impl Module for Clipboard {
                 ui.painter().text(
                     pos2(text_x + 18.0, row.center().y),
                     Align2::LEFT_CENTER,
-                    "Copied",
+                    nook_ui::i18n::tr("Copied"),
                     Theme::font(SIZE_LABEL),
                     theme.accent_fg(),
                 );
@@ -409,7 +420,7 @@ impl Module for Clipboard {
                                 Theme::font(SIZE_LABEL),
                                 theme.text,
                             );
-                            format!("{} chars", t.chars().count())
+                            format!("{} {}", t.chars().count(), nook_ui::i18n::tr("chars"))
                         }
                         ClipContent::Image(_) => match entry.texture(&ctx) {
                             Some((tex, img)) => {

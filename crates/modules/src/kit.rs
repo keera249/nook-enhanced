@@ -197,7 +197,7 @@ pub fn field(
             .frame(egui::Frame::NONE)
             .font(font)
             .text_color(theme.text)
-            .hint_text(egui::RichText::new(hint).color(theme.text_faint))
+            .hint_text(egui::RichText::new(nook_ui::i18n::tr(hint)).color(theme.text_faint))
             .desired_width(inner.width())
             .vertical_align(Align::Center),
     )
@@ -240,8 +240,10 @@ pub fn row(ui: &mut Ui, rect: Rect, id: Id, selected: bool, theme: &Theme) -> Re
 
 /// Text cut to one line (`…` at the end); returns the rect it took.
 pub fn one_line(ui: &Ui, pos: Pos2, text: &str, width: f32, font: FontId, color: Color32) -> Rect {
-    let mut job =
-        LayoutJob::single_section(text.replace('\n', " "), TextFormat::simple(font, color));
+    let mut job = LayoutJob::single_section(
+        nook_ui::i18n::tr(&text.replace('\n', " ")),
+        TextFormat::simple(font, color),
+    );
     job.wrap = TextWrapping {
         max_width: width.max(1.0),
         max_rows: 1,
@@ -334,7 +336,7 @@ pub fn empty(ui: &Ui, center: Pos2, glyph: &str, text: &str, theme: &Theme) {
     ui.painter().text(
         center + vec2(0.0, 16.0),
         Align2::CENTER_CENTER,
-        text,
+        nook_ui::i18n::tr(text),
         Theme::font(SIZE_LABEL + 1.0),
         theme.text_dim,
     );
@@ -359,7 +361,7 @@ pub fn wheel_lines(ctx: &egui::Context) -> f32 {
 
 /// Persistent `key=value` settings for a module, one per line.
 pub fn settings_path(file: &str) -> Option<std::path::PathBuf> {
-    std::env::var_os("APPDATA").map(|a| std::path::PathBuf::from(a).join("Nook").join(file))
+    nook_platform::files::config_dir().map(|d| d.join(file))
 }
 
 pub fn read_settings(file: &str) -> Vec<(String, String)> {
@@ -387,5 +389,46 @@ pub fn write_settings(file: &str, pairs: &[(&str, String)]) {
         .collect();
     if let Err(e) = std::fs::write(&path, text) {
         tracing::warn!("saving {}: {e}", path.display());
+    }
+}
+
+/// Shapes Arabic/RTL text and paints it at `pos` with `align`.
+pub fn text(
+    painter: &egui::Painter,
+    pos: Pos2,
+    align: Align2,
+    s: &str,
+    font: FontId,
+    color: Color32,
+) {
+    painter.text(pos, align, nook_ui::arabic::shape_bidi(s), font, color);
+}
+
+/// Draws a standard glass card in `rect`.
+pub fn card(painter: &egui::Painter, rect: Rect, theme: &Theme) {
+    widgets::card(painter, rect, theme);
+}
+
+/// Alias for [`meter`] used by dashboard tiles and pages.
+pub fn bar(painter: &egui::Painter, rect: Rect, t: f32, color: Color32, theme: &Theme) {
+    meter(painter, rect, t, color, theme);
+}
+
+/// A compact pill button allocated inside a flowing `Ui` (such as `ui_page` header actions).
+pub fn pill(ui: &mut Ui, label: &str, active: bool, theme: &Theme) -> Response {
+    let translated = nook_ui::i18n::tr(label);
+    let w = (translated.chars().count() as f32 * 6.5 + 18.0).max(44.0);
+    let (rect, _) = ui.allocate_exact_size(vec2(w, 24.0), Sense::hover());
+    chip(ui, rect, label, active, theme)
+}
+
+/// Infers whether the current tile content rect is `Small` (1x1), `Wide` (2x1), or `Large` (2x2).
+pub fn tile_size(rect: Rect) -> nook_ui::module::TileSize {
+    if rect.height() > 80.0 {
+        nook_ui::module::TileSize::Large
+    } else if rect.width() > 80.0 {
+        nook_ui::module::TileSize::Wide
+    } else {
+        nook_ui::module::TileSize::Small
     }
 }

@@ -10,11 +10,13 @@ rust-version = "1.85"
 
 [workspace.dependencies]
 eframe = { version = "0.36", default-features = false, features = ["glow", "wgpu_no_default_features", "default_fonts"] }
-# DX12 only: its DirectComposition swapchain gives the window real per-pixel alpha.
-wgpu = { version = "30", default-features = false, features = ["dx12", "wgsl"] }
+# DX12 on Windows (DirectComposition per-pixel alpha); Vulkan/GL on Linux.
+wgpu = { version = "30", default-features = false, features = ["wgsl"] }
 egui = "0.36"
 egui-phosphor = { version = "0.14", features = ["regular", "fill"] }
 windows = "0.62"
+libc = "0.2"
+x11rb = { version = "0.13", features = ["randr", "shape", "xfixes"] }
 tray-icon = "0.26"
 global-hotkey = "0.9"
 serde = { version = "1", features = ["derive"] }

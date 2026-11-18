@@ -59,7 +59,7 @@ enum Event {
 }
 
 fn config_file() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Nook").join("wallpaper.txt"))
+    nook_platform::files::config_dir().map(|d| d.join("wallpaper.txt"))
 }
 
 fn is_picture(path: &Path) -> bool {
@@ -448,13 +448,24 @@ impl Wallpaper {
         };
         let is_current = self.current.as_deref().is_some_and(|c| same_file(c, shown));
         let applying = self.applying.as_deref() == Some(shown.as_path());
-        let label = if applying {
-            format!("Setting {}…", file_name(shown))
+        let raw_label = if applying {
+            if nook_ui::i18n::is_arabic() {
+                format!("جاري تعيين {}…", file_name(shown))
+            } else {
+                format!("Setting {}…", file_name(shown))
+            }
         } else if is_current {
-            format!("{}  \u{00B7}  Current", file_name(shown))
+            if nook_ui::i18n::is_arabic() {
+                format!("{}  \u{00B7}  الحالية", file_name(shown))
+            } else {
+                format!("{}  \u{00B7}  Current", file_name(shown))
+            }
+        } else if nook_ui::i18n::is_arabic() {
+            format!("{}  \u{00B7}  انقر للتعيين", file_name(shown))
         } else {
             format!("{}  \u{00B7}  Click to set", file_name(shown))
         };
+        let label = nook_ui::arabic::shape_bidi(&raw_label);
         let font = Theme::font(SIZE_LABEL);
         let galley = ui
             .painter()
@@ -476,7 +487,7 @@ impl Wallpaper {
             ui.painter().text(
                 pos2(body.max.x - INSET, body.min.y + INSET + size.y * 0.5),
                 Align2::RIGHT_CENTER,
-                err,
+                nook_ui::i18n::tr(err),
                 Theme::font(SIZE_LABEL),
                 theme.accent_fg(),
             );
@@ -485,11 +496,11 @@ impl Wallpaper {
 
     fn empty_state(&mut self, ui: &mut Ui, body: Rect, theme: &Theme) {
         let text = if self.listing {
-            "Looking for pictures…"
+            nook_ui::i18n::tr("Looking for pictures…")
         } else if self.folder.is_some() {
-            "No pictures in this folder."
+            nook_ui::i18n::tr("No pictures in this folder.")
         } else {
-            "Choose a folder with your wallpapers."
+            nook_ui::i18n::tr("Choose a folder with your wallpapers.")
         };
         ui.painter().text(
             pos2(body.center().x, body.max.y - 58.0),
@@ -515,7 +526,7 @@ impl Wallpaper {
         ui.painter().text(
             button.left_center() + vec2(32.0, 0.0),
             Align2::LEFT_CENTER,
-            "Choose folder",
+            nook_ui::i18n::tr("Choose folder"),
             Theme::font_semibold(SIZE_LABEL + 1.0),
             Color32::WHITE,
         );
@@ -951,14 +962,18 @@ impl Module for Wallpaper {
         if resp.clicked() || resp.secondary_clicked() {
             self.open_page = true;
         }
-        resp.on_hover_text("Browse and set your wallpaper");
+        resp.on_hover_text(nook_ui::i18n::tr("Browse and set your wallpaper"));
     }
 
     fn ui_page(&mut self, ui: &mut Ui, header: &mut Ui, body: Rect, theme: &Theme) -> bool {
         if widgets::icon_button(header, icons::FOLDER_OPEN, 26.0, self.picking, theme)
             .on_hover_text(match &self.folder {
-                Some(f) => format!("{}\nClick to choose another folder", f.display()),
-                None => "Choose your wallpaper folder".to_owned(),
+                Some(f) => format!(
+                    "{}\n{}",
+                    f.display(),
+                    nook_ui::i18n::tr("Click to choose another folder")
+                ),
+                None => nook_ui::i18n::tr("Choose your wallpaper folder"),
             })
             .clicked()
         {
@@ -966,7 +981,7 @@ impl Module for Wallpaper {
         }
         if self.folder.is_some()
             && widgets::icon_button(header, icons::ARROWS_CLOCKWISE, 26.0, false, theme)
-                .on_hover_text("Look for new pictures")
+                .on_hover_text(nook_ui::i18n::tr("Look for new pictures"))
                 .clicked()
             && let Some(folder) = self.folder.clone()
         {

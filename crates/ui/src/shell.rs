@@ -337,11 +337,8 @@ impl Shell {
                 theme,
                 opacity,
                 progress,
-                now,
+                composited,
             );
-            if (progress > 0.05 || hovered) && !hidden {
-                ctx.request_repaint_after_secs(0.033);
-            }
         }
 
         // Collapsed badges fade out as the shell grows.

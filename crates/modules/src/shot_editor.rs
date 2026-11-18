@@ -399,7 +399,7 @@ impl Editor {
             self.close_after_copy = false;
         }
         let builder = ViewportBuilder::default()
-            .with_title("Screenshot - Nook")
+            .with_title(nook_ui::i18n::tr("Screenshot - Nook"))
             .with_inner_size(self.initial)
             .with_min_inner_size([560.0, 320.0])
             .with_resizable(true)
@@ -505,7 +505,7 @@ impl Editor {
         ui.spacing_mut().item_spacing.x = 4.0;
         for tool in Tool::ALL {
             if widgets::icon_button(ui, tool.icon(), 32.0, self.tool == tool, theme)
-                .on_hover_text(tool.label())
+                .on_hover_text(nook_ui::i18n::tr(tool.label()))
                 .clicked()
             {
                 self.commit_text();
@@ -533,10 +533,11 @@ impl Editor {
             }
         }
         ui.add_space(10.0);
-        widgets::segmented(ui, &["S", "M", "L"], &mut self.size, theme).on_hover_text("Size");
+        widgets::segmented(ui, &["S", "M", "L"], &mut self.size, theme)
+            .on_hover_text(nook_ui::i18n::tr("Size"));
         ui.add_space(6.0);
         if widgets::icon_button(ui, icons::ARROW_U_UP_LEFT, 32.0, false, theme)
-            .on_hover_text("Undo (Ctrl+Z)")
+            .on_hover_text(nook_ui::i18n::tr("Undo (Ctrl+Z)"))
             .clicked()
         {
             self.text = None;
@@ -547,20 +548,20 @@ impl Editor {
             ui.spacing_mut().item_spacing.x = 4.0;
             let ctx = ui.ctx().clone();
             if widgets::icon_button(ui, icons::CHECK, 32.0, true, theme)
-                .on_hover_text("Copy and close (Enter)")
+                .on_hover_text(nook_ui::i18n::tr("Copy and close (Enter)"))
                 .clicked()
             {
                 self.close_after_copy = true;
                 self.export(false, &ctx);
             }
             if widgets::icon_button(ui, icons::FLOPPY_DISK, 32.0, false, theme)
-                .on_hover_text("Save to Screenshots (Ctrl+S)")
+                .on_hover_text(nook_ui::i18n::tr("Save to Screenshots (Ctrl+S)"))
                 .clicked()
             {
                 self.export(true, &ctx);
             }
             if widgets::icon_button(ui, icons::COPY, 32.0, false, theme)
-                .on_hover_text("Copy (Ctrl+C)")
+                .on_hover_text(nook_ui::i18n::tr("Copy (Ctrl+C)"))
                 .clicked()
             {
                 self.export(false, &ctx);
@@ -584,7 +585,7 @@ impl Editor {
         match status {
             Status::Copied => {
                 ui.label(
-                    egui::RichText::new("Copied")
+                    egui::RichText::new(nook_ui::i18n::tr("Copied"))
                         .font(font)
                         .color(theme.accent_fg()),
                 );
@@ -593,7 +594,7 @@ impl Editor {
                 let resp = ui
                     .add(
                         egui::Label::new(
-                            egui::RichText::new("Saved · Show")
+                            egui::RichText::new(nook_ui::i18n::tr("Saved · Show"))
                                 .font(font)
                                 .color(theme.accent_fg()),
                         )
@@ -608,7 +609,7 @@ impl Editor {
             }
             Status::Failed(e) => {
                 ui.label(
-                    egui::RichText::new("Failed")
+                    egui::RichText::new(nook_ui::i18n::tr("Failed"))
                         .font(font)
                         .color(theme.text_dim),
                 )
@@ -756,7 +757,7 @@ impl Editor {
             .frame(egui::Frame::NONE)
             .font(font)
             .text_color(Color32::from_rgb(rgb[0], rgb[1], rgb[2]))
-            .hint_text("Type, then Enter")
+            .hint_text(nook_ui::i18n::tr("Type, then Enter"))
             .margin(egui::Margin::ZERO)
             .desired_width(600.0);
         let resp = ui.put(rect, edit);
@@ -834,7 +835,7 @@ fn paint_shape(
             painter.text(
                 to_screen(*pos),
                 Align2::LEFT_TOP,
-                text,
+                nook_ui::arabic::shape_bidi(text),
                 FontId::new(
                     size * scale,
                     egui::FontFamily::Name(nook_ui::theme::FAMILY_SEMIBOLD.into()),

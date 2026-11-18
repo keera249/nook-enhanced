@@ -11,9 +11,9 @@ use std::path::Path;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 use windows::Win32::Media::Audio::{
-    CALLBACK_NULL, HWAVEIN, PlaySoundW, SND_ASYNC, SND_FILENAME, SND_FLAGS, SND_NODEFAULT,
-    WAVE_FORMAT_PCM, WAVE_MAPPER, WAVEFORMATEX, WAVEHDR, WHDR_DONE, waveInAddBuffer, waveInClose,
-    waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset, waveInStart,
+    CALLBACK_NULL, HWAVEIN, PlaySoundW, SND_ASYNC, SND_FILENAME, SND_FLAGS, SND_LOOP,
+    SND_NODEFAULT, WAVE_FORMAT_PCM, WAVE_MAPPER, WAVEFORMATEX, WAVEHDR, WHDR_DONE, waveInAddBuffer,
+    waveInClose, waveInGetNumDevs, waveInOpen, waveInPrepareHeader, waveInReset, waveInStart,
     waveInUnprepareHeader,
 };
 use windows::core::{PCWSTR, PSTR};
@@ -202,6 +202,27 @@ pub fn play(path: &Path) -> Result<()> {
     } else {
         Err(PlatformError::Other(format!(
             "could not play {}",
+            path.display()
+        )))
+    }
+}
+
+/// Starts playing a WAV file in a continuous loop until [`stop_playback`] is called.
+pub fn play_loop(path: &Path) -> Result<()> {
+    let w = wide(&path.to_string_lossy());
+    // SAFETY: a null-terminated path; PlaySound copies what it needs.
+    let ok = unsafe {
+        PlaySoundW(
+            PCWSTR(w.as_ptr()),
+            None,
+            SND_FILENAME | SND_ASYNC | SND_NODEFAULT | SND_LOOP,
+        )
+    };
+    if ok.as_bool() {
+        Ok(())
+    } else {
+        Err(PlatformError::Other(format!(
+            "could not loop {}",
             path.display()
         )))
     }

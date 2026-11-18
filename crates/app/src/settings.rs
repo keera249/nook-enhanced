@@ -1,6 +1,8 @@
 //! Settings: the gear tile in the bento grid and the in-notch settings page.
 
-use crate::config::{AccentSource, Config, GrainSize, Material, MonitorMode, NotchShape, Renderer};
+use crate::config::{
+    AccentSource, Config, GrainSize, IdlePillMode, Material, MonitorMode, NotchShape, Renderer,
+};
 use crate::update::{self, Status};
 use egui::{
     Align, Align2, Area, Color32, Id, Layout, Order, Rect, Sense, Stroke, Ui, UiBuilder, pos2, vec2,
@@ -257,9 +259,12 @@ pub fn page(
                 NotchShape::Notch => 1,
             };
             if row(&mut lui, "Shape", theme, |ui| {
-                widgets::segmented(ui, &["Island", "Notch"], &mut shape_idx, theme).on_hover_text(
-                    "Island floats slightly below the top edge; Notch hangs flush against the top screen bezel",
-                )
+                let tip = if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi("الجزيرة تطفو قليلاً أسفل الحافة العلوية؛ النوتش يلتصق تماماً بأعلى الشاشة")
+                } else {
+                    "Island floats slightly below the top edge; Notch hangs flush against the top screen bezel".to_owned()
+                };
+                widgets::segmented(ui, &["Island", "Notch"], &mut shape_idx, theme).on_hover_text(tip)
             }) {
                 cfg.notch_shape = [NotchShape::Island, NotchShape::Notch][shape_idx];
                 out.changed = true;
@@ -277,9 +282,12 @@ pub fn page(
             }
             let mut mini = cfg.mini_in_fullscreen;
             if row(&mut lui, "Mini in full window", theme, |ui| {
-                widgets::toggle(ui, &mut mini, theme).on_hover_text(
-                    "Shrink the notch to a tiny pill when an app is fullscreen or maximized",
-                )
+                let tip = if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi("تصغير النوتش إلى شريط صغير عندما يكون التطبيق في وضع ملء الشاشة أو مكبراً")
+                } else {
+                    "Shrink the notch to a tiny pill when an app is fullscreen or maximized".to_owned()
+                };
+                widgets::toggle(ui, &mut mini, theme).on_hover_text(tip)
             }) {
                 cfg.mini_in_fullscreen = mini;
                 if mini {
@@ -289,8 +297,12 @@ pub fn page(
             }
             let mut hide = cfg.hide_in_fullscreen;
             if row(&mut lui, "Hide in full window", theme, |ui| {
-                widgets::toggle(ui, &mut hide, theme)
-                    .on_hover_text("Fade the notch out when an app or browser is fullscreen or maximized")
+                let tip = if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi("إخفاء النوتش تماماً عندما يكون التطبيق أو المتصفح في وضع ملء الشاشة")
+                } else {
+                    "Fade the notch out when an app or browser is fullscreen or maximized".to_owned()
+                };
+                widgets::toggle(ui, &mut hide, theme).on_hover_text(tip)
             }) {
                 cfg.hide_in_fullscreen = hide;
                 if hide {
@@ -346,6 +358,40 @@ pub fn page(
             }) {
                 cfg.language = [nook_ui::i18n::Language::Arabic, nook_ui::i18n::Language::English][lang_idx];
                 nook_ui::i18n::set_language(cfg.language);
+                out.changed = true;
+            }
+            let mut idle_idx = IdlePillMode::ALL
+                .iter()
+                .position(|&m| m == cfg.idle_pill_mode)
+                .unwrap_or(0);
+            if row(&mut rui, "Idle pill", theme, |ui| {
+                let (mode_label, mode_icon) = match cfg.idle_pill_mode {
+                    IdlePillMode::Clock => ("Clock", icons::CLOCK),
+                    IdlePillMode::Cat => ("Cat Pet", icons::CAT),
+                    IdlePillMode::Dog => ("Dog Pet", icons::DOG),
+                    IdlePillMode::Bunny => ("Bunny Pet", icons::RABBIT),
+                    IdlePillMode::Stats => ("CPU & RAM", icons::CPU),
+                };
+                let (btn_r, mut resp) = ui.allocate_exact_size(vec2(124.0, 24.0), Sense::click());
+                let text = nook_ui::i18n::tr(mode_label);
+                let _ = nook_modules::kit::button(ui, btn_r, &text, Some(mode_icon), false, theme);
+                if resp.clicked() {
+                    idle_idx = (idle_idx + 1) % IdlePillMode::ALL.len();
+                    resp.mark_changed();
+                } else if resp.secondary_clicked() {
+                    idle_idx = (idle_idx + IdlePillMode::ALL.len() - 1) % IdlePillMode::ALL.len();
+                    resp.mark_changed();
+                }
+                resp
+            }) {
+                cfg.idle_pill_mode = IdlePillMode::ALL[idle_idx];
+                out.changed = true;
+            }
+            let mut sys_hud = cfg.show_system_hud;
+            if row(&mut rui, "System HUDs", theme, |ui| {
+                widgets::toggle(ui, &mut sys_hud, theme)
+            }) {
+                cfg.show_system_hud = sys_hud;
                 out.changed = true;
             }
 
@@ -483,8 +529,13 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
         Material::Solid => 2,
     };
     if row(&mut lui, "Material", theme, |ui| {
+        let tip = if nook_ui::i18n::is_arabic() {
+            nook_ui::arabic::shape_bidi("زجاج عادي: ضبابية أكريليك قياسية\nزجاج سائل: زجاج كاسر للضوء مع انعكاسات عدسية متوهجة\nمعتم: لوحة داكنة غير شفافة")
+        } else {
+            "Glass: Standard acrylic blur\nLiquid Glass: Fluid refractive glass with glossy specular reflections & crystal caustics\nSolid: Opaque dark panel".to_owned()
+        };
         widgets::segmented(ui, &["Glass", "Liquid Glass", "Solid"], &mut mat_idx, theme)
-            .on_hover_text("Glass: Standard acrylic blur\nLiquid Glass: Fluid refractive glass with glossy specular reflections & crystal caustics\nSolid: Opaque dark panel")
+            .on_hover_text(tip)
     }) {
         cfg.material = [Material::Acrylic, Material::LiquidGlass, Material::Solid][mat_idx];
         out.changed = true;
@@ -539,7 +590,7 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
     if row(&mut rui, "Grain", theme, |ui| {
         let resp = widgets::slider(ui, &mut grain, 110.0, 20, theme);
         let text = if cfg.grain == 0 {
-            "Off".to_owned()
+            nook_ui::i18n::tr("Off")
         } else {
             format!("{}%", cfg.grain)
         };
@@ -597,10 +648,13 @@ fn customize_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out:
             vec2(96.0, 26.0),
         );
         let turn_label = nook_ui::i18n::tr("Turn on");
+        let turn_tip = if nook_ui::i18n::is_arabic() {
+            nook_ui::arabic::shape_bidi("يتطلب الزجاج والشفافية تفعيل تأثيرات الشفافية في إعدادات ويندوز > الألوان")
+        } else {
+            "Glass and opacity need Transparency effects in Windows Settings > Personalization > Colors".to_owned()
+        };
         if nook_modules::kit::button(ui, turn_on, &turn_label, Some(icons::ARROW_SQUARE_OUT), false, theme)
-            .on_hover_text(
-                "Glass and opacity need Transparency effects in Windows Settings > Personalization > Colors",
-            )
+            .on_hover_text(turn_tip)
             .clicked()
             && let Err(e) = nook_platform::shell::open("ms-settings:colors")
         {
@@ -675,15 +729,25 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
         Renderer::OpenGl => 2,
     };
     if row(&mut lui, "Renderer", theme, |ui| {
+        let tip = if nook_ui::i18n::is_arabic() {
+            nook_ui::arabic::shape_bidi("جرب OpenGL في حال وجود وميض؛ أو DirectX إذا ظهر مربع أسود")
+        } else {
+            "Try OpenGL if the panel flickers; DirectX if it shows a black box".to_owned()
+        };
         widgets::segmented(ui, &["Auto", "DirectX", "OpenGL"], &mut renderer_idx, theme)
-            .on_hover_text("Try OpenGL if the panel flickers; DirectX if it shows a black box")
+            .on_hover_text(tip)
     }) {
         cfg.renderer = [Renderer::Auto, Renderer::DirectX, Renderer::OpenGl][renderer_idx];
         out.changed = true;
     }
+    let renderer_hint = if nook_ui::i18n::is_arabic() {
+        format!("يعمل حالياً بـ {} · يطبق بعد إعادة التشغيل", crate::diag::active_renderer())
+    } else {
+        format!("Using {} · applies after restart", crate::diag::active_renderer())
+    };
     hint(
         &mut lui,
-        &format!("Using {} · applies after restart", crate::diag::active_renderer()),
+        &renderer_hint,
         theme,
     );
 
@@ -696,7 +760,7 @@ fn advanced_body(ui: &mut Ui, rect: Rect, theme: &Theme, cfg: &mut Config, out: 
     );
     let open_label = nook_ui::i18n::tr("Open log");
     if nook_modules::kit::button(ui, open_log, &open_label, Some(icons::FILE_TEXT), false, theme)
-        .on_hover_text("Shows nook.log in Explorer, to attach to a bug report")
+        .on_hover_text(nook_ui::i18n::tr("Shows nook.log in Explorer, to attach to a bug report"))
         .clicked()
         && let Some(path) = crate::diag::log_path()
         && let Err(e) = nook_platform::shell::reveal(&path)

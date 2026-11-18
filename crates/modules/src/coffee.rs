@@ -190,9 +190,33 @@ impl Module for Coffee {
             self.choice = (self.choice + 1) % DURATIONS.len();
         }
         let status = match (self.on, self.left()) {
-            (Some(_), Some(left)) => remaining_label(left),
+            (Some(_), Some(left)) => {
+                if nook_ui::i18n::is_arabic() {
+                    let mins = left.as_secs().div_ceil(60);
+                    if mins >= 60 {
+                        nook_ui::arabic::shape_bidi(&format!("متبقي {}:{:02}", mins / 60, mins % 60))
+                    } else {
+                        nook_ui::arabic::shape_bidi(&format!("متبقي {mins} د"))
+                    }
+                } else {
+                    remaining_label(left)
+                }
+            }
             (Some(_), None) => nook_ui::i18n::tr("Awake"),
-            (None, _) => duration_label(DURATIONS[self.choice]),
+            (None, _) => {
+                let m = DURATIONS[self.choice];
+                if nook_ui::i18n::is_arabic() {
+                    match m {
+                        None => nook_ui::i18n::tr("Always"),
+                        Some(mins) if mins >= 60 => {
+                            nook_ui::arabic::shape_bidi(&format!("{} س", mins / 60))
+                        }
+                        Some(mins) => nook_ui::arabic::shape_bidi(&format!("{mins} د")),
+                    }
+                } else {
+                    duration_label(m)
+                }
+            }
         };
         painter.text(
             pos2(text.min.x, cy - 7.0),
@@ -236,6 +260,7 @@ mod tests {
 
     #[test]
     fn labels() {
+        nook_ui::i18n::set_language(nook_ui::i18n::Language::English);
         assert_eq!(duration_label(None), "Always");
         assert_eq!(duration_label(Some(30)), "30 min");
         assert_eq!(duration_label(Some(120)), "2 h");

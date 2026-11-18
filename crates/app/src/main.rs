@@ -1,6 +1,6 @@
-//! Nook: a floating notch utility hub for Windows 10/11.
+//! Nook: a floating notch utility hub for Windows 10/11 and Linux.
 
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+#![cfg_attr(all(windows, not(debug_assertions)), windows_subsystem = "windows")]
 
 mod app;
 mod config;
@@ -41,6 +41,9 @@ fn start(instance: nook_platform::single_instance::InstanceGuard) -> Result<()> 
 
     let forced_gl = std::env::args().any(|a| a == GL_FLAG);
     let renderer = if forced_gl || cfg.renderer == config::Renderer::OpenGl {
+        eframe::Renderer::Glow
+    } else if cfg!(target_os = "linux") && cfg.renderer == config::Renderer::Auto {
+        // OpenGL (Glow) has the most reliable transparent borderless window support on X11/Wayland.
         eframe::Renderer::Glow
     } else {
         eframe::Renderer::Wgpu
@@ -109,9 +112,16 @@ fn run(
 fn wgpu_options() -> eframe::egui_wgpu::WgpuConfiguration {
     use eframe::egui_wgpu::{SurfaceConfig, WgpuConfiguration, WgpuSetup, WgpuSetupCreateNew};
     let mut setup = WgpuSetupCreateNew::without_display_handle();
-    setup.instance_descriptor.backends = wgpu::Backends::DX12;
-    setup.instance_descriptor.backend_options.dx12.presentation_system =
-        wgpu::Dx12SwapchainKind::DxgiFromVisual;
+    #[cfg(windows)]
+    {
+        setup.instance_descriptor.backends = wgpu::Backends::DX12;
+        setup.instance_descriptor.backend_options.dx12.presentation_system =
+            wgpu::Dx12SwapchainKind::DxgiFromVisual;
+    }
+    #[cfg(not(windows))]
+    {
+        setup.instance_descriptor.backends = wgpu::Backends::VULKAN | wgpu::Backends::GL;
+    }
     // The integrated GPU on hybrid laptops: a notch never needs the
     // discrete one, and waking it costs battery.
     setup.power_preference = wgpu::PowerPreference::LowPower;

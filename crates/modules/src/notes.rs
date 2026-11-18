@@ -84,7 +84,7 @@ fn ago(when: SystemTime, now: SystemTime) -> String {
 }
 
 fn notes_dir() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Nook").join("notes"))
+    nook_platform::files::config_dir().map(|d| d.join("notes"))
 }
 
 fn load(dir: &Path) -> Vec<Note> {
@@ -233,22 +233,41 @@ impl Notes {
                     if resp.clicked() {
                         pick = Some(i);
                     }
+                    let raw_title = note.title();
+                    let display_title = if raw_title == "New note" {
+                        nook_ui::i18n::tr("New note")
+                    } else {
+                        raw_title
+                    };
                     one_line(
                         ui,
                         pos2(row.min.x + 10.0, row.min.y + 6.0),
-                        &note.title(),
+                        &display_title,
                         row.width() - 20.0,
                         Theme::font_semibold(SIZE_LABEL + 1.0),
                         theme.text,
                     );
+                    let ago_str = if note.dirty.is_some() {
+                        nook_ui::i18n::tr("Editing")
+                    } else if nook_ui::i18n::is_arabic() {
+                        let secs = now
+                            .duration_since(note.modified)
+                            .map(|d| d.as_secs())
+                            .unwrap_or(0);
+                        let ar = match secs {
+                            0..60 => "الآن".to_owned(),
+                            60..3600 => format!("{} د", secs / 60),
+                            3600..86_400 => format!("{} س", secs / 3600),
+                            _ => format!("{} ي", secs / 86_400),
+                        };
+                        nook_ui::arabic::shape_bidi(&ar)
+                    } else {
+                        ago(note.modified, now)
+                    };
                     ui.painter().text(
                         pos2(row.min.x + 10.0, row.max.y - 9.0),
                         Align2::LEFT_CENTER,
-                        if note.dirty.is_some() {
-                            "Editing".to_owned()
-                        } else {
-                            ago(note.modified, now)
-                        },
+                        ago_str,
                         Theme::font(SIZE_LABEL - 1.0),
                         theme.text_faint,
                     );
@@ -278,8 +297,10 @@ impl Notes {
                     .font(Theme::font(SIZE_BODY))
                     .text_color(theme.text)
                     .hint_text(
-                        egui::RichText::new("Start typing. The first line is the title.")
-                            .color(theme.text_faint),
+                        egui::RichText::new(nook_ui::i18n::tr(
+                            "Start typing. The first line is the title.",
+                        ))
+                        .color(theme.text_faint),
                     )
                     .desired_width(inner.width())
                     .desired_rows(8)
@@ -296,7 +317,10 @@ impl Notes {
 }
 
 fn one_line(ui: &Ui, pos: egui::Pos2, text: &str, width: f32, font: egui::FontId, color: Color32) {
-    let mut job = LayoutJob::single_section(text.to_owned(), TextFormat::simple(font, color));
+    let mut job = LayoutJob::single_section(
+        nook_ui::arabic::shape_bidi(text),
+        TextFormat::simple(font, color),
+    );
     job.wrap = TextWrapping {
         max_width: width,
         max_rows: 1,

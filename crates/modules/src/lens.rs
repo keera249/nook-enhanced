@@ -191,7 +191,9 @@ impl Module for Lens {
         if self
             .snipper
             .tile(ui, ctx, icons::SCAN, "lens-tile")
-            .on_hover_text("Search part of the screen with Google Lens (opens your browser)")
+            .on_hover_text(nook_ui::i18n::tr(
+                "Search part of the screen with Google Lens (opens your browser)",
+            ))
             .clicked()
         {
             self.start();

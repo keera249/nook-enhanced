@@ -98,7 +98,10 @@ impl Module for PluginsTile {
 
     fn ui_tile(&mut self, ui: &mut Ui, ctx: &mut TileCtx<'_>) {
         let active = self.is_active();
-        if kit::tool_tile(ui, ctx, ph::PUZZLE_PIECE, active).clicked() {
+        if kit::tool_tile(ui, ctx, ph::PUZZLE_PIECE, active)
+            .on_hover_text(nook_ui::i18n::tr("Plugins"))
+            .clicked()
+        {
             self.page_request = true;
         }
     }
@@ -113,7 +116,7 @@ impl Module for PluginsTile {
         }
         if let Some(url) = marketplace()
             && widgets::icon_button(header, ph::STOREFRONT, nook_ui::page::HEADER, false, theme)
-                .on_hover_text("Browse the plugin marketplace")
+                .on_hover_text(nook_ui::i18n::tr("Browse the plugin marketplace"))
                 .clicked()
         {
             let _ = nook_platform::shell::open(&url);
@@ -134,12 +137,12 @@ impl Module for PluginsTile {
                     ui.add_space(6.0);
                 }
                 let (head, _) = ui.allocate_exact_size(vec2(w - 8.0, 18.0), Sense::hover());
-                kit::section(
-                    ui,
-                    head.min,
-                    &format!("INSTALLED · {}", self.installed.len()),
-                    theme,
-                );
+                let inst_header = if nook_ui::i18n::is_arabic() {
+                    format!("المثبّتة · {}", self.installed.len())
+                } else {
+                    format!("INSTALLED · {}", self.installed.len())
+                };
+                kit::section(ui, head.min, &inst_header, theme);
                 if self.installed.is_empty() {
                     let (rect, _) = ui.allocate_exact_size(vec2(w - 8.0, 120.0), Sense::hover());
                     let empty_msg = nook_ui::i18n::tr("No plugins yet. Install one from the marketplace, or drop a .zip here.");
@@ -221,18 +224,21 @@ fn request_card(ui: &mut Ui, rect: Rect, r: &Request, theme: &Theme) {
     let (icon, name, version) = match &r.state {
         State::Ready { manifest, .. } => (
             icons::glyph(&manifest.icon),
-            manifest.name.clone(),
+            nook_ui::i18n::tr(&manifest.name),
             manifest.version.clone(),
         ),
-        State::Done { name } => (ph::CHECK_CIRCLE, name.clone(), String::new()),
+        State::Done { name } => (ph::CHECK_CIRCLE, nook_ui::i18n::tr(name), String::new()),
         State::Failed(_) => (
             ph::WARNING_CIRCLE,
-            "Couldn't install".to_owned(),
+            nook_ui::i18n::tr("Couldn't install"),
             String::new(),
         ),
         _ => (
             ph::PUZZLE_PIECE,
-            r.expect.clone().unwrap_or_else(|| "Plugin".into()),
+            r.expect
+                .as_deref()
+                .map(nook_ui::i18n::tr)
+                .unwrap_or_else(|| nook_ui::i18n::tr("Plugin")),
             String::new(),
         ),
     };
@@ -301,19 +307,29 @@ fn request_card(ui: &mut Ui, rect: Rect, r: &Request, theme: &Theme) {
                 Theme::font(SIZE_LABEL),
                 theme.text_dim,
             );
+            let runs_line = if nook_ui::i18n::is_arabic() {
+                format!("يشغّل: {}", manifest.run.join(" "))
+            } else {
+                format!("Runs: {}", manifest.run.join(" "))
+            };
             kit::one_line(
                 ui,
                 line4,
-                &format!("Runs: {}", manifest.run.join(" ")),
+                &runs_line,
                 text_w,
                 FontId::monospace(SIZE_LABEL - 0.5),
                 theme.text,
             );
             if let Some(v) = installed {
+                let repl_line = if nook_ui::i18n::is_arabic() {
+                    format!("يستبدل الإصدار الحالي ({v}). يتم الاحتفاظ بالبيانات المحفوظة.")
+                } else {
+                    format!("Replaces the version you have ({v}). Its saved data is kept.")
+                };
                 kit::one_line(
                     ui,
                     pos2(x, inner.min.y + 74.0),
-                    &format!("Replaces the version you have ({v}). Its saved data is kept."),
+                    &repl_line,
                     text_w,
                     Theme::font(SIZE_LABEL - 1.0),
                     theme.accent_fg(),
@@ -346,7 +362,7 @@ fn request_card(ui: &mut Ui, rect: Rect, r: &Request, theme: &Theme) {
         }
         State::Failed(e) => {
             let galley = ui.painter().layout(
-                e.clone(),
+                nook_ui::i18n::tr(e),
                 Theme::font(SIZE_LABEL),
                 theme.text_dim,
                 text_w + buttons_w - 90.0,
@@ -360,7 +376,9 @@ fn request_card(ui: &mut Ui, rect: Rect, r: &Request, theme: &Theme) {
         ui.painter().text(
             pos2(inner.min.x, inner.max.y),
             Align2::LEFT_BOTTOM,
-            "Plugins run with your rights, like any app. Install only code you trust.",
+            nook_ui::i18n::tr(
+                "Plugins run with your rights, like any app. Install only code you trust.",
+            ),
             Theme::font(SIZE_LABEL - 1.0),
             theme.text_faint,
         );
@@ -424,10 +442,11 @@ fn installed_row(
     );
     let x = rect.min.x + 44.0;
     let w = rect.width() - 44.0 - 120.0;
+    let disp_name = nook_ui::i18n::tr(&f.manifest.name);
     let title = if f.manifest.version.is_empty() {
-        f.manifest.name.clone()
+        disp_name
     } else {
-        format!("{}  v{}", f.manifest.name, f.manifest.version)
+        format!("{disp_name}  v{}", f.manifest.version)
     };
     kit::one_line(
         ui,
@@ -439,7 +458,11 @@ fn installed_row(
     );
     let (line, color) = match install::remove_error(&f.manifest.id) {
         Some(e) => (
-            format!("Couldn't remove: {e}"),
+            if nook_ui::i18n::is_arabic() {
+                format!("تعذرت الإزالة: {e}")
+            } else {
+                format!("Couldn't remove: {e}")
+            },
             Color32::from_rgb(0xF0, 0x5A, 0x5A),
         ),
         None => (f.dir.display().to_string(), theme.text_faint),

@@ -38,9 +38,9 @@ use windows::System::{DispatcherQueue, DispatcherQueueController};
 use windows::UI::Color;
 use windows::UI::Composition::Desktop::DesktopWindowTarget;
 use windows::UI::Composition::{
-    CompositionColorBrush, CompositionColorGradientStop, CompositionLineGeometry,
-    CompositionLinearGradientBrush, CompositionMappingMode, CompositionPath,
-    CompositionSpriteShape, Compositor, ContainerVisual, SpriteVisual,
+    CompositionColorGradientStop, CompositionLineGeometry, CompositionLinearGradientBrush,
+    CompositionMappingMode, CompositionPath, CompositionSpriteShape, Compositor, ContainerVisual,
+    SpriteVisual,
 };
 use windows::Win32::Foundation::{HWND, LPARAM, LRESULT, RECT, WPARAM};
 use windows::Win32::Graphics::Direct2D::Common::{
@@ -138,18 +138,23 @@ fn create_host_window() -> Result<HWND> {
 /// window pixels.
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Tint {
-    /// Fill gradient, top and bottom of the shape.
+    /// 4-stop vertical fill gradient (0.0, 0.26, 0.72, 1.0) of the shape.
     pub top: [u8; 4],
+    pub upper_mid: [u8; 4],
+    pub lower_mid: [u8; 4],
     pub bottom: [u8; 4],
     pub y0: f32,
     pub y1: f32,
     /// Show the blur layer under the tint (off for the "Solid" material).
     pub blur: bool,
-    /// Rim stroke along the outline. Half of it falls outside the clip, so
-    /// pass twice the visible width.
-    pub rim: [u8; 4],
+    /// 3-stop vertical Fresnel rim stroke along the outline (top specular,
+    /// side glass, bottom caustic bounce). Half of it falls outside the clip,
+    /// so pass twice the visible width.
+    pub rim_top: [u8; 4],
+    pub rim_mid: [u8; 4],
+    pub rim_bottom: [u8; 4],
     pub rim_width: f32,
-    /// Top highlight line: color at its middle, fading to clear at the ends.
+    /// Specular highlight line: color at its middle, fading to clear at the ends.
     pub highlight: [u8; 4],
     pub highlight_x0: f32,
     pub highlight_x1: f32,
@@ -173,9 +178,10 @@ pub struct Backdrop {
     root: ContainerVisual,
     blur: SpriteVisual,
     tint: CompositionLinearGradientBrush,
-    stops: [CompositionColorGradientStop; 2],
+    stops: [CompositionColorGradientStop; 4],
     rim: CompositionSpriteShape,
-    rim_brush: CompositionColorBrush,
+    rim_brush: CompositionLinearGradientBrush,
+    rim_stops: [CompositionColorGradientStop; 3],
     highlight_line: CompositionLineGeometry,
     highlight_brush: CompositionLinearGradientBrush,
     highlight_stops: [CompositionColorGradientStop; 3],
@@ -256,6 +262,12 @@ impl Backdrop {
                 .CreateColorGradientStopWithOffsetAndColor(0.0, clear)
                 .api("CreateColorGradientStop")?,
             compositor
+                .CreateColorGradientStopWithOffsetAndColor(0.26, clear)
+                .api("CreateColorGradientStop")?,
+            compositor
+                .CreateColorGradientStopWithOffsetAndColor(0.72, clear)
+                .api("CreateColorGradientStop")?,
+            compositor
                 .CreateColorGradientStopWithOffsetAndColor(1.0, clear)
                 .api("CreateColorGradientStop")?,
         ];
@@ -269,14 +281,32 @@ impl Backdrop {
             .SetRelativeSizeAdjustment(full)
             .api("SetRelativeSizeAdjustment")?;
 
-        // Edge decorations: rim along the outline, highlight along the top.
+        // Edge decorations: 3-stop Fresnel rim along the outline, highlight along the crest.
         let shapes = compositor.CreateShapeVisual().api("CreateShapeVisual")?;
         shapes
             .SetRelativeSizeAdjustment(full)
             .api("SetRelativeSizeAdjustment")?;
         let rim_brush = compositor
-            .CreateColorBrushWithColor(clear)
-            .api("CreateColorBrush")?;
+            .CreateLinearGradientBrush()
+            .api("CreateLinearGradientBrush(rim)")?;
+        rim_brush
+            .SetMappingMode(CompositionMappingMode::Absolute)
+            .api("SetMappingMode(rim)")?;
+        let rim_stops = [
+            compositor
+                .CreateColorGradientStopWithOffsetAndColor(0.0, clear)
+                .api("CreateColorGradientStop(rim 0)")?,
+            compositor
+                .CreateColorGradientStopWithOffsetAndColor(0.52, clear)
+                .api("CreateColorGradientStop(rim 1)")?,
+            compositor
+                .CreateColorGradientStopWithOffsetAndColor(1.0, clear)
+                .api("CreateColorGradientStop(rim 2)")?,
+        ];
+        let rim_collection = rim_brush.ColorStops().api("ColorStops(rim)")?;
+        for stop in &rim_stops {
+            rim_collection.Append(stop).api("ColorStops::Append(rim)")?;
+        }
         let rim = compositor.CreateSpriteShape().api("CreateSpriteShape")?;
         rim.SetStrokeBrush(&rim_brush).api("SetStrokeBrush")?;
         let highlight_brush = compositor
@@ -345,6 +375,7 @@ impl Backdrop {
             stops,
             rim,
             rim_brush,
+            rim_stops,
             highlight_line,
             highlight_brush,
             highlight_stops,
@@ -434,12 +465,19 @@ impl Backdrop {
             return Ok(());
         }
         self.stops[0].SetColor(color(tint.top)).api("SetColor")?;
-        self.stops[1].SetColor(color(tint.bottom)).api("SetColor")?;
+        self.stops[1]
+            .SetColor(color(tint.upper_mid))
+            .api("SetColor")?;
+        self.stops[2]
+            .SetColor(color(tint.lower_mid))
+            .api("SetColor")?;
+        self.stops[3].SetColor(color(tint.bottom)).api("SetColor")?;
+        let y_end = tint.y1.max(tint.y0 + 1.0);
         self.tint
             .SetStartPoint(Vector2 { X: 0.0, Y: tint.y0 })
             .api("SetStartPoint")?;
         self.tint
-            .SetEndPoint(Vector2 { X: 0.0, Y: tint.y1 })
+            .SetEndPoint(Vector2 { X: 0.0, Y: y_end })
             .api("SetEndPoint")?;
         if self.last_tint.map(|t| t.blur) != Some(tint.blur) {
             self.blur
@@ -447,9 +485,21 @@ impl Backdrop {
                 .api("SetIsVisible(blur)")?;
         }
 
+        self.rim_stops[0]
+            .SetColor(color(tint.rim_top))
+            .api("SetColor(rim 0)")?;
+        self.rim_stops[1]
+            .SetColor(color(tint.rim_mid))
+            .api("SetColor(rim 1)")?;
+        self.rim_stops[2]
+            .SetColor(color(tint.rim_bottom))
+            .api("SetColor(rim 2)")?;
         self.rim_brush
-            .SetColor(color(tint.rim))
-            .api("SetColor(rim)")?;
+            .SetStartPoint(Vector2 { X: 0.0, Y: tint.y0 })
+            .api("SetStartPoint(rim)")?;
+        self.rim_brush
+            .SetEndPoint(Vector2 { X: 0.0, Y: y_end })
+            .api("SetEndPoint(rim)")?;
         self.rim
             .SetStrokeThickness(tint.rim_width)
             .api("SetStrokeThickness")?;

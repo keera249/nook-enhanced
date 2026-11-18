@@ -267,3 +267,277 @@ pub fn alert_sound() {
         tracing::debug!("MessageBeep: {e}");
     }
 }
+
+/// Toggle states of `(Caps Lock, Num Lock, Scroll Lock)`.
+pub fn lock_keys() -> (bool, bool, bool) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        GetKeyState, VK_CAPITAL, VK_NUMLOCK, VK_SCROLL,
+    };
+    // SAFETY: GetKeyState is a read-only query of the key toggle bit (bit 0).
+    unsafe {
+        let caps = (GetKeyState(i32::from(VK_CAPITAL.0)) & 1) != 0;
+        let num = (GetKeyState(i32::from(VK_NUMLOCK.0)) & 1) != 0;
+        let scroll = (GetKeyState(i32::from(VK_SCROLL.0)) & 1) != 0;
+        (caps, num, scroll)
+    }
+}
+
+/// Sends native Windows media/volume virtual keys (`VK_VOLUME_UP` / `VK_VOLUME_DOWN`)
+/// with zero process-spawn overhead.
+pub fn volume_step(steps: i32) {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_VOLUME_DOWN, VK_VOLUME_UP, keybd_event,
+    };
+    let vk = if steps >= 0 {
+        VK_VOLUME_UP.0 as u8
+    } else {
+        VK_VOLUME_DOWN.0 as u8
+    };
+    let count = steps.unsigned_abs().clamp(1, 10);
+    unsafe {
+        for _ in 0..count {
+            keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0);
+            keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+        }
+    }
+}
+
+/// Toggles master system audio mute via native `VK_VOLUME_MUTE`.
+pub fn volume_mute_toggle() {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_VOLUME_MUTE, keybd_event,
+    };
+    let vk = VK_VOLUME_MUTE.0 as u8;
+    unsafe {
+        keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0);
+        keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+    }
+}
+
+/// Toggles global media Play/Pause via native `VK_MEDIA_PLAY_PAUSE`.
+pub fn media_play_pause_key() {
+    use windows::Win32::UI::Input::KeyboardAndMouse::{
+        KEYEVENTF_EXTENDEDKEY, KEYEVENTF_KEYUP, VK_MEDIA_PLAY_PAUSE, keybd_event,
+    };
+    let vk = VK_MEDIA_PLAY_PAUSE.0 as u8;
+    unsafe {
+        keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY, 0);
+        keybd_event(vk, 0, KEYEVENTF_EXTENDEDKEY | KEYEVENTF_KEYUP, 0);
+    }
+}
+
+/// Returns `(microphone_in_use, webcam_in_use)` by inspecting Windows
+/// `CapabilityAccessManager\ConsentStore` registry keys (`LastUsedTimeStop == 0`
+/// while `LastUsedTimeStart > 0`).
+pub fn privacy_in_use() -> (bool, bool) {
+    (
+        consent_capability_active("microphone"),
+        consent_capability_active("webcam"),
+    )
+}
+
+fn consent_capability_active(capability: &str) -> bool {
+    let base = format!(
+        r"Software\Microsoft\Windows\CurrentVersion\CapabilityAccessManager\ConsentStore\{capability}"
+    );
+    let non_packaged = format!(r"{base}\NonPackaged");
+    consent_tree_has_active(&base) || consent_tree_has_active(&non_packaged)
+}
+
+fn consent_tree_has_active(subkey_path: &str) -> bool {
+    use crate::wide;
+    use windows::Win32::System::Registry::{
+        HKEY, HKEY_CURRENT_USER, KEY_READ, RRF_RT_REG_QWORD, RegCloseKey, RegEnumKeyExW,
+        RegGetValueW, RegOpenKeyExW,
+    };
+    use windows::core::{PCWSTR, PWSTR};
+
+    let path_w = wide(subkey_path);
+    let mut hkey = HKEY::default();
+    // SAFETY: read-only registry open and enumeration.
+    unsafe {
+        if RegOpenKeyExW(
+            HKEY_CURRENT_USER,
+            PCWSTR(path_w.as_ptr()),
+            Some(0),
+            KEY_READ,
+            &mut hkey,
+        )
+        .is_err()
+        {
+            return false;
+        }
+        let mut active = false;
+        let mut idx = 0u32;
+        let mut name_buf = [0u16; 260];
+        let start_w = wide("LastUsedTimeStart");
+        let stop_w = wide("LastUsedTimeStop");
+        loop {
+            let mut name_len = name_buf.len() as u32;
+            let res = RegEnumKeyExW(
+                hkey,
+                idx,
+                 Some(PWSTR(name_buf.as_mut_ptr())),
+                &mut name_len,
+                None,
+                None,
+                None,
+                None,
+            );
+            if res.is_err() {
+                break;
+            }
+            idx += 1;
+            let child = String::from_utf16_lossy(&name_buf[..name_len as usize]);
+            if child == "NonPackaged" {
+                continue;
+            }
+            let child_w = wide(&child);
+            let mut stop_val = 1u64;
+            let mut sz = std::mem::size_of::<u64>() as u32;
+            let ok_stop = RegGetValueW(
+                hkey,
+                PCWSTR(child_w.as_ptr()),
+                PCWSTR(stop_w.as_ptr()),
+                RRF_RT_REG_QWORD,
+                None,
+                Some(&mut stop_val as *mut u64 as *mut _),
+                Some(&mut sz),
+            )
+            .is_ok();
+            if ok_stop && stop_val == 0 {
+                let mut start_val = 0u64;
+                let mut sz2 = std::mem::size_of::<u64>() as u32;
+                let ok_start = RegGetValueW(
+                    hkey,
+                    PCWSTR(child_w.as_ptr()),
+                    PCWSTR(start_w.as_ptr()),
+                    RRF_RT_REG_QWORD,
+                    None,
+                    Some(&mut start_val as *mut u64 as *mut _),
+                    Some(&mut sz2),
+                )
+                .is_ok();
+                if ok_start && start_val > 0 {
+                    active = true;
+                    break;
+                }
+            }
+        }
+        let _ = RegCloseKey(hkey);
+        active
+    }
+}
+
+/// Friendly name of the current foreground application (excluding desktop
+/// shell and Nook itself), for daily Screen Time tracking.
+pub fn foreground_app_name(own: crate::Hwnd) -> Option<String> {
+    use windows::Win32::Foundation::CloseHandle;
+    use windows::Win32::System::Threading::{
+        GetCurrentProcessId, OpenProcess, PROCESS_NAME_WIN32, PROCESS_QUERY_LIMITED_INFORMATION,
+        QueryFullProcessImageNameW,
+    };
+    use windows::Win32::UI::WindowsAndMessaging::{
+        GetForegroundWindow, GetShellWindow, GetWindowTextW, GetWindowThreadProcessId,
+        IsWindowVisible,
+    };
+    use windows::core::PWSTR;
+
+    unsafe {
+        let fg = GetForegroundWindow();
+        if fg.is_invalid() || fg == own.get() || fg == GetShellWindow() {
+            return None;
+        }
+        if !IsWindowVisible(fg).as_bool() {
+            return None;
+        }
+        let mut pid = 0u32;
+        GetWindowThreadProcessId(fg, Some(&mut pid));
+        if pid == 0 || pid == GetCurrentProcessId() {
+            return None;
+        }
+        let mut raw_stem = String::new();
+        if let Ok(h) = OpenProcess(PROCESS_QUERY_LIMITED_INFORMATION, false, pid) {
+            let mut buf = [0u16; 520];
+            let mut len = buf.len() as u32;
+            if QueryFullProcessImageNameW(
+                h,
+                PROCESS_NAME_WIN32,
+                PWSTR(buf.as_mut_ptr()),
+                &mut len,
+            )
+            .is_ok()
+                && len > 0
+            {
+                let full = String::from_utf16_lossy(&buf[..len as usize]);
+                if let Some(file) = full.rsplit(['\\', '/']).next() {
+                    raw_stem = file
+                        .strip_suffix(".exe")
+                        .or_else(|| file.strip_suffix(".EXE"))
+                        .unwrap_or(file)
+                        .to_owned();
+                }
+            }
+            let _ = CloseHandle(h);
+        }
+        let lower = raw_stem.to_ascii_lowercase();
+        if matches!(
+            lower.as_str(),
+            "" | "idle"
+                | "system"
+                | "searchhost"
+                | "searchapp"
+                | "startmenuexperiencehost"
+                | "shellexperiencehost"
+                | "lockapp"
+                | "textinputhost"
+                | "nook"
+        ) {
+            return None;
+        }
+        if lower == "applicationframehost" {
+            let mut tbuf = [0u16; 128];
+            let n = GetWindowTextW(fg, &mut tbuf);
+            if n > 0 {
+                let title = String::from_utf16_lossy(&tbuf[..n as usize]).trim().to_owned();
+                if !title.is_empty() {
+                    return Some(title);
+                }
+            }
+        }
+        Some(friendly_process_name(&raw_stem))
+    }
+}
+
+fn friendly_process_name(stem: &str) -> String {
+    match stem.to_ascii_lowercase().as_str() {
+        "chrome" => "Google Chrome".into(),
+        "msedge" => "Microsoft Edge".into(),
+        "firefox" => "Firefox".into(),
+        "brave" => "Brave".into(),
+        "opera" => "Opera".into(),
+        "code" => "VS Code".into(),
+        "devenv" => "Visual Studio".into(),
+        "discord" => "Discord".into(),
+        "spotify" => "Spotify".into(),
+        "steam" | "steamwebhelper" => "Steam".into(),
+        "explorer" => "File Explorer".into(),
+        "windowsterminal" | "wt" => "Terminal".into(),
+        "powershell" | "pwsh" => "PowerShell".into(),
+        "cmd" => "Command Prompt".into(),
+        "notepad" => "Notepad".into(),
+        "obsidian" => "Obsidian".into(),
+        "telegram" => "Telegram".into(),
+        "whatsapp" => "WhatsApp".into(),
+        "slack" => "Slack".into(),
+        "vlc" => "VLC".into(),
+        "obs64" | "obs" => "OBS Studio".into(),
+        _ => {
+            let mut chars = stem.chars();
+            match chars.next() {
+                Some(first) => first.to_uppercase().collect::<String>() + chars.as_str(),
+                None => stem.to_owned(),
+            }
+        }
+    }
+}

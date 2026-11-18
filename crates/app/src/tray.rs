@@ -1,9 +1,15 @@
 //! System tray icon and menu.
 
+#[cfg(any(windows, feature = "linux-tray"))]
 use anyhow::{Context, Result};
+#[cfg(not(any(windows, feature = "linux-tray")))]
+use anyhow::Result;
 use crossbeam_channel::Sender;
+#[cfg(any(windows, feature = "linux-tray"))]
 use nook_ui::geometry::Squircle;
+#[cfg(any(windows, feature = "linux-tray"))]
 use tray_icon::menu::{CheckMenuItem, Menu, MenuEvent, MenuItem, PredefinedMenuItem};
+#[cfg(any(windows, feature = "linux-tray"))]
 use tray_icon::{Icon, TrayIcon, TrayIconBuilder};
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -17,12 +23,37 @@ pub enum TrayCommand {
     Quit,
 }
 
+#[cfg(not(any(windows, feature = "linux-tray")))]
+pub struct Tray;
+
+#[cfg(not(any(windows, feature = "linux-tray")))]
+#[cfg(any(windows, feature = "linux-tray"))]
+impl Tray {
+    pub fn new(
+        _tx: Sender<TrayCommand>,
+        _ctx: egui::Context,
+        _startup_on: bool,
+        _on_top_on: bool,
+    ) -> Result<Self> {
+        Ok(Self)
+    }
+
+    pub fn sync_language(&self) {}
+    pub fn set_update(&mut self, _version: Option<&str>) {}
+    pub fn set_pinned(&self, _pinned: bool) {}
+    pub fn set_on_top(&self, _on: bool) {}
+    pub fn set_startup(&self, _on: bool) {}
+}
+
+#[cfg(any(windows, feature = "linux-tray"))]
 pub struct Tray {
     _icon: TrayIcon,
     menu: Menu,
+    settings: MenuItem,
     pin: CheckMenuItem,
     on_top: CheckMenuItem,
     startup: CheckMenuItem,
+    quit: MenuItem,
     /// "Update to x.y.z", at the top of the menu while an update is offered.
     update: MenuItem,
     update_sep: PredefinedMenuItem,
@@ -30,6 +61,7 @@ pub struct Tray {
     update_shown: Option<String>,
 }
 
+#[cfg(any(windows, feature = "linux-tray"))]
 impl Tray {
     /// Must run on the thread that pumps Win32 messages (the UI thread).
     pub fn new(
@@ -76,16 +108,36 @@ impl Tray {
             .with_icon(tray_icon()?)
             .build()
             .context("creating tray icon")?;
-        Ok(Self {
+        let tray = Self {
             _icon: icon,
             menu,
+            settings,
             pin,
             on_top,
             startup,
+            quit,
             update: MenuItem::with_id("update", "Update", true, None),
             update_sep: PredefinedMenuItem::separator(),
             update_shown: None,
-        })
+        };
+        tray.sync_language();
+        Ok(tray)
+    }
+
+    pub fn sync_language(&self) {
+        if nook_ui::i18n::is_arabic() {
+            self.settings.set_text("الإعدادات");
+            self.pin.set_text("تثبيت النوتش مفتوحاً");
+            self.on_top.set_text("دائماً في المقدمة");
+            self.startup.set_text("تشغيل مع بدء ويندوز");
+            self.quit.set_text("إنهاء نووك");
+        } else {
+            self.settings.set_text("Settings");
+            self.pin.set_text("Pin open");
+            self.on_top.set_text("Always on top");
+            self.startup.set_text("Launch at startup");
+            self.quit.set_text("Quit Nook");
+        }
     }
 
     /// Shows "Update to `version`" at the top of the menu, or removes it.
@@ -125,22 +177,25 @@ impl Tray {
     }
 }
 
-/// Resource id of the app icon `build.rs` embeds (winresource's default).
+#[cfg(windows)]
 const APP_ICON_RESOURCE: u16 = 1;
 
-/// The app icon embedded in nook.exe, picked at the notification area's
-/// size so it stays sharp at any scale. Falls back to a drawn pill if the
-/// resource is missing (a build without it).
+#[cfg(any(windows, feature = "linux-tray"))]
 fn tray_icon() -> Result<Icon> {
-    let px = nook_platform::system::small_icon_size();
-    match Icon::from_resource(APP_ICON_RESOURCE, Some((px, px))) {
-        Ok(icon) => Ok(icon),
-        Err(e) => {
-            tracing::warn!("tray icon resource: {e}; using the drawn glyph");
-            tray_glyph()
+    #[cfg(windows)]
+    {
+        let px = nook_platform::system::small_icon_size();
+        match Icon::from_resource(APP_ICON_RESOURCE, Some((px, px))) {
+            Ok(icon) => return Ok(icon),
+            Err(e) => {
+                tracing::warn!("tray icon resource: {e}; using the drawn glyph");
+            }
         }
     }
+    tray_glyph()
 }
+
+#[cfg(any(windows, feature = "linux-tray"))]
 
 /// A small white pill on a transparent background, drawn in code.
 fn tray_glyph() -> Result<Icon> {

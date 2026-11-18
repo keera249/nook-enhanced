@@ -1,0 +1,10 @@
+id            = "game-launcher"
+name          = "Game Launcher"
+icon          = "game-controller"
+size          = "wide"
+run           = ["python3", "launcher_linux.py"]
+accepts_files = true
+page_size     = [596, 340]
+description   = "Auto-detects installed Steam, Heroic (Epic/GOG), Lutris, and desktop games on Linux, or drop any game executable/.desktop file."
+author        = "you"
+version       = "1.2.0"

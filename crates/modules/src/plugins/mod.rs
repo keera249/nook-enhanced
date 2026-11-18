@@ -669,7 +669,7 @@ impl Module for Plugin {
                     ui,
                     self.icon,
                     self.name(),
-                    "Stopped · click to restart",
+                    &nook_ui::i18n::tr("Stopped · click to restart"),
                     theme,
                     ctx.hovered,
                 );
@@ -733,7 +733,7 @@ impl Module for Plugin {
             let r = if a.tooltip.is_empty() {
                 r
             } else {
-                r.on_hover_text(&a.tooltip)
+                r.on_hover_text(nook_ui::i18n::tr(&a.tooltip))
             };
             if r.clicked() {
                 self.outbox
@@ -766,10 +766,18 @@ impl Module for Plugin {
         } else if let Some(view) = self.page.clone() {
             self.render(&mut child, &view, theme, "page");
         } else {
+            let no_page = if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi(&format!(
+                    "{} لا يحتوي على صفحة",
+                    nook_ui::i18n::tr(self.name())
+                ))
+            } else {
+                format!("{} has no page", self.name())
+            };
             child.painter().text(
                 pos2(body.center().x, body.center().y),
                 egui::Align2::CENTER_CENTER,
-                format!("{} has no page", self.name()),
+                no_page,
                 Theme::font(SIZE_BODY),
                 theme.text_dim,
             );

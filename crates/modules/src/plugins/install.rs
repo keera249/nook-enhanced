@@ -598,10 +598,8 @@ fn preview(source: &Source, expect: Option<&str>) -> Result<Manifest, String> {
 
 /// `%APPDATA%\Nook\plugins`, created if needed.
 pub fn plugins_root() -> PathBuf {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    let dir = base.join("Nook").join("plugins");
+    let base = nook_platform::files::config_dir().unwrap_or_else(std::env::temp_dir);
+    let dir = base.join("plugins");
     let _ = std::fs::create_dir_all(&dir);
     dir
 }

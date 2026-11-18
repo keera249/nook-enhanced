@@ -11,6 +11,11 @@
 
 use crate::{PlatformError, Result, Win32Context};
 use std::path::{Path, PathBuf};
+
+/// Returns Nook's per-user configuration/data directory (`%APPDATA%\Nook` on Windows).
+pub fn config_dir() -> Option<PathBuf> {
+    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Nook"))
+}
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use windows::Win32::Foundation::SIZE;

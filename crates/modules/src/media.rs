@@ -15,7 +15,7 @@ use nook_platform::media::{MediaCommand, MediaWatcher, NowPlaying};
 use nook_ui::module::{Badge, Module, TileCtx, TileSize};
 use nook_ui::theme::{SIZE_BODY, SIZE_LABEL, Theme, with_alpha};
 use nook_ui::{icons, paint, widgets};
-use std::sync::Arc;
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
 
 const ART: f32 = 44.0;
@@ -29,6 +29,10 @@ pub struct Media {
     art: Option<(usize, TextureHandle)>,
     ctx: Option<egui::Context>,
     open_page: bool,
+    show_lyrics: bool,
+    lyrics_key: String,
+    lyrics: Arc<Mutex<Vec<(f64, String)>>>,
+    lyrics_loading: Arc<Mutex<bool>>,
 }
 
 impl Media {
@@ -49,6 +53,71 @@ impl Media {
         }
         self.art.as_ref().map(|(_, t)| t.id())
     }
+
+    fn fetch_lyrics(&mut self, title: &str, artist: &str) {
+        if let Ok(mut l) = self.lyrics.lock() {
+            l.clear();
+        }
+        if let Ok(mut b) = self.lyrics_loading.lock() {
+            *b = true;
+        }
+        let t = title.trim().to_owned();
+        let a = artist.trim().to_owned();
+        let out_arc = Arc::clone(&self.lyrics);
+        let load_arc = Arc::clone(&self.lyrics_loading);
+        std::thread::spawn(move || {
+            let agent = ureq::AgentBuilder::new()
+                .timeout(Duration::from_secs(5))
+                .build();
+            let req = agent
+                .get("https://lrclib.net/api/search")
+                .query("track_name", &t)
+                .query("artist_name", &a);
+            if let Ok(resp) = req.call()
+                && let Ok(arr) = resp.into_json::<serde_json::Value>()
+                && let Some(first) = arr.as_array().and_then(|v| v.first())
+            {
+                let parsed = if let Some(synced) = first.get("syncedLyrics").and_then(|v| v.as_str())
+                    && !synced.trim().is_empty()
+                {
+                    parse_lrc(synced)
+                } else if let Some(plain) = first.get("plainLyrics").and_then(|v| v.as_str()) {
+                    plain
+                        .lines()
+                        .enumerate()
+                        .map(|(i, l)| (i as f64 * 4.0, l.trim().to_owned()))
+                        .filter(|(_, l)| !l.is_empty())
+                        .collect()
+                } else {
+                    Vec::new()
+                };
+                if let Ok(mut guard) = out_arc.lock() {
+                    *guard = parsed;
+                }
+            }
+            if let Ok(mut b) = load_arc.lock() {
+                *b = false;
+            }
+        });
+    }
+}
+
+fn parse_lrc(raw: &str) -> Vec<(f64, String)> {
+    let mut out = Vec::new();
+    for line in raw.lines() {
+        let l = line.trim();
+        if let Some(rest) = l.strip_prefix('[')
+            && let Some((ts, txt)) = rest.split_once(']')
+            && let Some((m_s, s_s)) = ts.split_once(':')
+            && let (Ok(m), Ok(s)) = (m_s.trim().parse::<f64>(), s_s.trim().parse::<f64>())
+        {
+            let text = txt.trim().to_owned();
+            if !text.is_empty() {
+                out.push((m * 60.0 + s, text));
+            }
+        }
+    }
+    out
 }
 
 /// Single-line text, elided with "…" to `width` (with Arabic shaping).
@@ -123,7 +192,7 @@ impl Module for Media {
         } else if !n.source.trim().is_empty() {
             n.source.clone()
         } else {
-            "Now playing".to_owned()
+            nook_ui::i18n::tr("Now playing")
         };
         Some(Badge::Media {
             title,
@@ -188,19 +257,29 @@ impl Module for Media {
             ui.painter().text(
                 c + vec2(0.0, 18.0),
                 Align2::CENTER_CENTER,
-                "Nothing playing right now",
+                nook_ui::i18n::tr("Nothing playing right now"),
                 Theme::font(SIZE_BODY),
                 theme.text_dim,
             );
             return false;
         };
 
+        if crate::kit::pill(header, "Lyrics", self.show_lyrics, theme).clicked() {
+            self.show_lyrics = !self.show_lyrics;
+        }
+        header.add_space(6.0);
         if !now.source.is_empty() {
             header.label(
                 egui::RichText::new(&now.source)
                     .font(Theme::font_semibold(SIZE_LABEL))
                     .color(theme.accent_fg()),
             );
+        }
+
+        let track_key = format!("{}|{}", now.title.trim(), now.artist.trim());
+        if self.show_lyrics && !now.title.trim().is_empty() && self.lyrics_key != track_key {
+            self.lyrics_key = track_key;
+            self.fetch_lyrics(&now.title, &now.artist);
         }
 
         let inner = body.shrink2(vec2(6.0, 4.0));
@@ -235,8 +314,66 @@ impl Module for Media {
         let col_w = (inner.max.x - col_x).max(80.0);
         let top_y = art_rect.min.y + 4.0;
 
+        if self.show_lyrics {
+            let lyr_rect = Rect::from_min_max(
+                pos2(col_x, art_rect.min.y),
+                pos2(inner.max.x, art_rect.max.y),
+            );
+            widgets::card(ui.painter(), lyr_rect, theme);
+            let loading = self.lyrics_loading.lock().map(|b| *b).unwrap_or(false);
+            let lines = self.lyrics.lock().map(|v| v.clone()).unwrap_or_default();
+            let pos_secs = now.position().map(|(p, _)| p).unwrap_or(0.0);
+            if loading {
+                crate::kit::text(
+                    ui.painter(),
+                    lyr_rect.center(),
+                    Align2::CENTER_CENTER,
+                    &nook_ui::i18n::tr("Loading synced lyrics..."),
+                    Theme::font(SIZE_BODY),
+                    theme.text_dim,
+                );
+            } else if lines.is_empty() {
+                crate::kit::text(
+                    ui.painter(),
+                    lyr_rect.center(),
+                    Align2::CENTER_CENTER,
+                    &nook_ui::i18n::tr("No synced lyrics found for this track"),
+                    Theme::font(SIZE_BODY),
+                    theme.text_faint,
+                );
+            } else {
+                let cur_idx = lines
+                    .iter()
+                    .rposition(|(t, _)| *t <= pos_secs + 0.25)
+                    .unwrap_or(0);
+                let start_i = cur_idx.saturating_sub(1);
+                for (row_i, idx) in (start_i..(start_i + 4).min(lines.len())).enumerate() {
+                    let is_current = idx == cur_idx;
+                    let y = lyr_rect.top() + 18.0 + row_i as f32 * 28.0;
+                    text_line(
+                        ui,
+                        pos2(lyr_rect.left() + 14.0, y),
+                        &lines[idx].1,
+                        lyr_rect.width() - 28.0,
+                        if is_current {
+                            Theme::font_semibold(SIZE_BODY + 1.5)
+                        } else {
+                            Theme::font(SIZE_BODY - 0.5)
+                        },
+                        if is_current {
+                            theme.accent_fg()
+                        } else {
+                            theme.text_dim
+                        },
+                    );
+                }
+            }
+            return false;
+        }
+
+        let unknown_title = nook_ui::i18n::tr("Unknown title");
         let title = if now.title.is_empty() {
-            "Unknown title"
+            unknown_title.as_str()
         } else {
             &now.title
         };
@@ -314,7 +451,11 @@ impl Module for Media {
             ui.painter().text(
                 pos2(col_x, bar_y + 6.0),
                 Align2::LEFT_CENTER,
-                if now.playing { "Playing live" } else { "Paused" },
+                if now.playing {
+                    nook_ui::i18n::tr("Playing live")
+                } else {
+                    nook_ui::i18n::tr("Paused")
+                },
                 Theme::font(SIZE_LABEL),
                 theme.text_dim,
             );
@@ -326,15 +467,15 @@ impl Module for Media {
         let gap = 44.0;
         if now.can_previous
             && button_at(ui, pos2(cx - gap, ctrl_y), 30.0, icons::SKIP_BACK, false, theme)
-                .on_hover_text("Previous")
+                .on_hover_text(nook_ui::i18n::tr("Previous"))
                 .clicked()
         {
             self.send(MediaCommand::Previous);
         }
         let (glyph, tip) = if now.playing {
-            (icons::PAUSE, "Pause")
+            (icons::PAUSE, nook_ui::i18n::tr("Pause"))
         } else {
-            (icons::PLAY, "Play")
+            (icons::PLAY, nook_ui::i18n::tr("Play"))
         };
         if now.can_toggle
             && button_at(ui, pos2(cx, ctrl_y), 36.0, glyph, true, theme)
@@ -352,7 +493,7 @@ impl Module for Media {
         }
         if now.can_next
             && button_at(ui, pos2(cx + gap, ctrl_y), 30.0, icons::SKIP_FORWARD, false, theme)
-                .on_hover_text("Next")
+                .on_hover_text(nook_ui::i18n::tr("Next"))
                 .clicked()
         {
             self.send(MediaCommand::Next);
@@ -378,7 +519,7 @@ impl Module for Media {
             ui.painter().text(
                 c + vec2(0.0, 18.0),
                 Align2::CENTER_CENTER,
-                "Nothing playing",
+                nook_ui::i18n::tr("Nothing playing"),
                 Theme::font(SIZE_LABEL),
                 theme.text_dim,
             );
@@ -432,15 +573,20 @@ impl Module for Media {
             ui.painter().text(
                 pos2(col, rect.min.y + 24.0),
                 Align2::LEFT_CENTER,
-                if now.playing { "Playing" } else { "Paused" },
+                if now.playing {
+                    nook_ui::i18n::tr("Playing")
+                } else {
+                    nook_ui::i18n::tr("Paused")
+                },
                 Theme::font(SIZE_LABEL - 1.0),
                 theme.text_dim,
             );
         }
 
         // Title and artist.
+        let unknown_title = nook_ui::i18n::tr("Unknown title");
         let title = if now.title.is_empty() {
-            "Unknown title"
+            unknown_title.as_str()
         } else {
             &now.title
         };
@@ -468,16 +614,16 @@ impl Module for Media {
         let gap = 34.0;
         if now.can_previous
             && button_at(ui, pos2(cx - gap, y), 24.0, icons::SKIP_BACK, false, theme)
-                .on_hover_text("Previous")
+                .on_hover_text(nook_ui::i18n::tr("Previous"))
                 .clicked()
         {
             self.send(MediaCommand::Previous);
             transport_clicked = true;
         }
         let (glyph, tip) = if now.playing {
-            (icons::PAUSE, "Pause")
+            (icons::PAUSE, nook_ui::i18n::tr("Pause"))
         } else {
-            (icons::PLAY, "Play")
+            (icons::PLAY, nook_ui::i18n::tr("Play"))
         };
         if now.can_toggle
             && button_at(ui, pos2(cx, y), 28.0, glyph, true, theme)
@@ -504,7 +650,7 @@ impl Module for Media {
                 false,
                 theme,
             )
-            .on_hover_text("Next")
+            .on_hover_text(nook_ui::i18n::tr("Next"))
             .clicked()
         {
             self.send(MediaCommand::Next);
@@ -516,7 +662,7 @@ impl Module for Media {
         if !transport_clicked
             && ui
                 .interact(open_hit, egui::Id::new("nook-media-open-page"), Sense::click())
-                .on_hover_text("Open Media Player")
+                .on_hover_text(nook_ui::i18n::tr("Open Media Player"))
                 .clicked()
         {
             self.open_page = true;

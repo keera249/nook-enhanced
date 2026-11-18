@@ -54,6 +54,32 @@ pub enum NotchShape {
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
+pub enum IdlePillMode {
+    /// Standard clock and battery/badges in the collapsed pill.
+    #[default]
+    Clock,
+    /// Animated virtual Cat pet walking/resting in the collapsed pill.
+    Cat,
+    /// Animated virtual Dog pet in the collapsed pill.
+    Dog,
+    /// Animated virtual Bunny pet in the collapsed pill.
+    Bunny,
+    /// Live CPU & RAM usage telemetry in the collapsed pill.
+    Stats,
+}
+
+impl IdlePillMode {
+    pub const ALL: [Self; 5] = [
+        Self::Clock,
+        Self::Cat,
+        Self::Dog,
+        Self::Bunny,
+        Self::Stats,
+    ];
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Renderer {
     /// DirectX 12, falling back to OpenGL when it cannot start.
     #[default]
@@ -119,6 +145,12 @@ pub struct Config {
     /// Floating island pill or hardware notch flush with the top edge.
     #[serde(default)]
     pub notch_shape: NotchShape,
+    /// Idle face shown in the collapsed Notch pill (Clock, Cat, Dog, Bunny, Stats).
+    #[serde(default)]
+    pub idle_pill_mode: IdlePillMode,
+    /// Show Dynamic Island HUD banners on Caps/Num Lock, Charger, and Mic changes.
+    #[serde(default = "default_true")]
+    pub show_system_hud: bool,
     /// Above all windows (true) or behind them.
     pub on_top: bool,
     /// Fade the notch out while a fullscreen app (game, video) is in front
@@ -159,6 +191,10 @@ impl Default for Config {
         sizes.insert("plugin:power-mode".to_string(), TileSize::Small);
         sizes.insert("quick_launch".to_string(), TileSize::Wide);
         sizes.insert("quick_launch_2".to_string(), TileSize::Large);
+        sizes.insert("calculator".to_string(), TileSize::Wide);
+        for &(id, sz) in NOTCHPIXEL_MODULE_SIZES {
+            sizes.insert(id.to_string(), sz);
+        }
 
         Self {
             theme: ThemeMode::Dark,
@@ -173,6 +209,8 @@ impl Default for Config {
             placement: Placement::Center,
             language: Language::Arabic,
             notch_shape: NotchShape::Notch,
+            idle_pill_mode: IdlePillMode::Clock,
+            show_system_hud: true,
             on_top: true,
             hide_in_fullscreen: false,
             mini_in_fullscreen: true,
@@ -202,6 +240,10 @@ fn default_notch_width() -> u32 {
     200
 }
 
+fn default_true() -> bool {
+    true
+}
+
 pub const DEFAULT_GLASS_OPACITY: u8 = 40;
 pub const DEFAULT_GRAIN: u8 = 0;
 
@@ -211,6 +253,21 @@ pub const BUNDLED_PLUGIN_SIZES: &[(&str, TileSize)] = &[
     ("plugin:volume-mixer", TileSize::Small),
     ("plugin:dawwar", TileSize::Wide),
     ("plugin:power-mode", TileSize::Small),
+];
+
+pub const NOTCHPIXEL_MODULE_SIZES: &[(&str, TileSize)] = &[
+    ("control_center", TileSize::Wide),
+    ("weather", TileSize::Wide),
+    ("todo_focus", TileSize::Wide),
+    ("net_ping", TileSize::Wide),
+    ("world_clock", TileSize::Wide),
+    ("market_watch", TileSize::Wide),
+    ("screen_time", TileSize::Wide),
+    ("reminders", TileSize::Wide),
+    ("unit_converter", TileSize::Wide),
+    ("translator", TileSize::Wide),
+    ("habit_water", TileSize::Wide),
+    ("ambient_sound", TileSize::Wide),
 ];
 
 impl Config {
@@ -223,8 +280,9 @@ impl Config {
         let missing_bundled = BUNDLED_PLUGIN_SIZES
             .iter()
             .any(|(id, _)| !self.modules.order.iter().any(|o| o == id));
+        let missing_new_suite = !self.modules.order.iter().any(|o| o == "translator");
 
-        if missing_bundled {
+        if missing_bundled || missing_new_suite {
             let mut new_order: Vec<String> = nook_modules::DEFAULT_ORDER
                 .iter()
                 .map(|s| (*s).to_owned())
@@ -238,6 +296,16 @@ impl Config {
             self.modules
                 .disabled
                 .retain(|d| !BUNDLED_PLUGIN_SIZES.iter().any(|(id, _)| d == id));
+
+            if missing_new_suite {
+                self.modules.disabled.clear();
+                self.modules
+                    .sizes
+                    .insert("calculator".to_owned(), TileSize::Wide);
+                for &(id, size) in NOTCHPIXEL_MODULE_SIZES {
+                    self.modules.sizes.insert(id.to_owned(), size);
+                }
+            }
 
             // If this config had the old vanilla look signature, upgrade to Liquid Glass.
             if self.material == Material::Acrylic && self.glass_opacity == 70 && self.grain == 35 {
@@ -271,6 +339,16 @@ impl Config {
                 .insert("quick_launch_2".to_owned(), TileSize::Large);
             changed = true;
         }
+        for &(id, size) in NOTCHPIXEL_MODULE_SIZES {
+            if !self.modules.order.iter().any(|o| o == id) {
+                self.modules.order.push(id.to_owned());
+                changed = true;
+            }
+            if !self.modules.sizes.contains_key(id) {
+                self.modules.sizes.insert(id.to_owned(), size);
+                changed = true;
+            }
+        }
 
         changed
     }
@@ -298,8 +376,7 @@ impl Config {
 }
 
 pub fn dir() -> Result<PathBuf> {
-    let appdata = std::env::var_os("APPDATA").context("APPDATA is not set")?;
-    Ok(PathBuf::from(appdata).join("Nook"))
+    nook_platform::files::config_dir().context("config directory is not available")
 }
 
 pub fn path() -> Result<PathBuf> {

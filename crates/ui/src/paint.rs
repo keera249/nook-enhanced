@@ -134,277 +134,243 @@ pub fn top_highlight(painter: &Painter, shape: &Squircle, color: Color32) {
     painter.add(Shape::mesh(mesh));
 }
 
-/// Specular reflections, refractive inner caustic bevel, and fluid surface lens curve
-/// for both the expanded panel and the collapsed Dynamic Island pill.
+/// Exact horizontal `[x_left, x_right]` span of `shape` at vertical coordinate `y`.
+/// Evaluating against the full `Squircle` avoids creating a truncated squircle with
+/// unwanted bottom-corner rounding in the middle of a tile or panel.
+fn squircle_x_span(shape: &Squircle, y: f32) -> (f32, f32) {
+    let rect = shape.rect;
+    let r = shape.radius;
+    let e = shape.exponent.max(2.0);
+    let inset = if !shape.flat_top && r > 0.0 && y < rect.min.y + r {
+        let qy = ((rect.min.y + r - y) / r).clamp(0.0, 1.0);
+        let qx = (1.0 - qy.powf(e)).max(0.0).powf(1.0 / e);
+        r * (1.0 - qx)
+    } else if r > 0.0 && y > rect.max.y - r {
+        let qy = ((y - (rect.max.y - r)) / r).clamp(0.0, 1.0);
+        let qx = (1.0 - qy.powf(e)).max(0.0).powf(1.0 / e);
+        r * (1.0 - qx)
+    } else {
+        0.0
+    };
+    (rect.min.x + inset, rect.max.x - inset)
+}
+
+/// Paints a 2D convex optical lens sheen over the upper `reach_frac` (0..1) of `shape`,
+/// staying 100% flush with `shape`'s true top corners and vertical walls.
+pub fn fill_convex_sheen(
+    painter: &Painter,
+    shape: &Squircle,
+    reach_frac: f32,
+    top_center: Color32,
+    top_edge: Color32,
+) {
+    let rect = shape.rect;
+    let span_y = (rect.height() * reach_frac.clamp(0.05, 1.0)).max(2.0);
+    if rect.width() <= 2.0 || span_y <= 2.0 {
+        return;
+    }
+    const SLICES: usize = 16;
+    let mut mesh = Mesh::default();
+    let cx = rect.center().x;
+
+    for i in 0..=SLICES {
+        // Cosine spacing clusters slices near the top corner curve for sub-pixel accuracy.
+        let u = i as f32 / SLICES as f32;
+        let t = 1.0 - (u * std::f32::consts::FRAC_PI_2).cos();
+        let y = rect.min.y + span_y * t;
+        let (xl, xr) = squircle_x_span(shape, y);
+        // Smooth quadratic optical attenuation from top (1.0) to reach_frac (0.0).
+        let falloff = (1.0 - t) * (1.0 - t);
+        let c_mid = with_alpha(top_center, falloff);
+        let c_side = with_alpha(top_edge, falloff);
+        mesh.colored_vertex(pos2(xl, y), c_side);
+        mesh.colored_vertex(pos2(cx, y), c_mid);
+        mesh.colored_vertex(pos2(xr, y), c_side);
+    }
+
+    for i in 0..(SLICES as u32) {
+        let row0 = i * 3;
+        let row1 = (i + 1) * 3;
+        // Left quad (xl..cx)
+        mesh.add_triangle(row0, row0 + 1, row1);
+        mesh.add_triangle(row0 + 1, row1 + 1, row1);
+        // Right quad (cx..xr)
+        mesh.add_triangle(row0 + 1, row0 + 2, row1 + 1);
+        mesh.add_triangle(row0 + 2, row1 + 2, row1 + 1);
+    }
+    painter.add(Shape::mesh(mesh));
+}
+
+/// Paints a directional 2D Fresnel specular & caustic rim around `outline` using
+/// egui's hardware-feathered `PathStroke::new_uv`.
+pub fn fresnel_rim_stroke(
+    painter: &Painter,
+    outline: Vec<Pos2>,
+    top_col: Color32,
+    side_col: Color32,
+    bot_col: Color32,
+    width: f32,
+) {
+    if outline.len() < 3 {
+        return;
+    }
+    let stroke = PathStroke::new_uv(width, move |bbox, p| {
+        let ny = ((p.y - bbox.min.y) / bbox.height().max(1.0)).clamp(0.0, 1.0);
+        let nx = ((p.x - bbox.min.x) / bbox.width().max(1.0)).clamp(0.0, 1.0);
+        if ny < 0.52 {
+            let k = (1.0 - ny / 0.52).clamp(0.0, 1.0);
+            // Slight top-left directional specular bias
+            let spec_boost = (1.0 - nx * 0.22).clamp(0.78, 1.0);
+            lerp_color(side_col, top_col, (k * k * spec_boost).clamp(0.0, 1.0))
+        } else {
+            let k = ((ny - 0.52) / 0.48).clamp(0.0, 1.0);
+            // Slight bottom-right caustic refraction gathering
+            let caustic_boost = (0.82 + nx * 0.18).clamp(0.82, 1.0);
+            lerp_color(side_col, bot_col, (k * k * caustic_boost).clamp(0.0, 1.0))
+        }
+    });
+    painter.add(PathShape::closed_line(outline, stroke));
+}
+
+/// Interior optical lens sheen for the shell.
+/// When `composited` is true, `nook_platform::backdrop::Backdrop` already renders the
+/// hardware-synchronized 4-stop Liquid Glass gradient, 3-stop Fresnel rim, and highlight
+/// inside the DWM `GeometricClip`, so we only add the settled interior dome well inside
+/// the clip to guarantee zero swapchain edge ghosting during spring animations.
 pub fn liquid_sheen(
     painter: &Painter,
     shape: &Squircle,
     theme: &Theme,
     opacity: f32,
     progress: f32,
-    time: f64,
+    composited: bool,
 ) {
     if opacity <= 0.01 {
         return;
     }
-    let rect = shape.rect;
-    let r = shape.radius;
-    let pill_stage = (1.0 - progress / 0.35).clamp(0.0, 1.0);
 
-    // 1. In the collapsed Dynamic Island pill:
-    // Polished liquid obsidian meniscus, caustic refraction rim, and prismatic specular reflex.
-    if pill_stage > 0.01 {
-        let p_alpha = pill_stage * opacity;
-        let h = (rect.height() * 0.52).max(4.0);
-        let highlight_top = Color32::from_rgba_unmultiplied(255, 255, 255, (95.0 * p_alpha) as u8);
-        let highlight_bot = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
-
-        // Meniscus convex specular dome
-        let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
-        let meniscus = Squircle::new(sheen_rect, (r - 1.0).max(2.0)).with_flat_top(shape.flat_top);
-        fill_gradient(painter, &meniscus.outline(), highlight_top, highlight_bot);
-
-        // Micro caustic refraction rim (inset 1.0px) around the whole pill
-        let inner_rect = rect.shrink(1.0);
-        if inner_rect.width() > 0.0 && inner_rect.height() > 0.0 {
-            let inner_pill = Squircle::new(inner_rect, (r - 1.0).max(2.0)).with_flat_top(shape.flat_top);
-            let caustic_c = Color32::from_rgba_unmultiplied(255, 255, 255, (45.0 * p_alpha) as u8);
-            painter.add(PathShape::closed_line(
-                inner_pill.outline(),
-                PathStroke::new(0.9, caustic_c),
-            ));
-        }
-
-        // Sharp specular reflex line along the top curve
-        let x0 = rect.min.x + r * 0.55;
-        let x1 = rect.max.x - r * 0.55;
-        if x1 > x0 + 10.0 {
-            let mut mesh = Mesh::default();
-            let y = rect.min.y + 1.2;
-            let mid_x = 0.5 * (x0 + x1);
-            let c_center = Color32::from_rgba_unmultiplied(255, 255, 255, (190.0 * p_alpha) as u8);
-            let c_edge = Color32::TRANSPARENT;
-            for (x, c) in [(x0, c_edge), (mid_x, c_center), (x1, c_edge)] {
-                mesh.colored_vertex(pos2(x, y), c);
-                mesh.colored_vertex(pos2(x, y + 1.0), c);
-            }
-            mesh.add_triangle(0, 1, 2);
-            mesh.add_triangle(1, 2, 3);
-            mesh.add_triangle(2, 3, 4);
-            mesh.add_triangle(3, 4, 5);
-            painter.add(Shape::mesh(mesh));
-
-            // Chromatic / accent dispersion fringe directly underneath specular line
-            let mut prism_mesh = Mesh::default();
-            let py = y + 1.0;
-            let prism_base = mix(Color32::from_rgb(180, 220, 255), theme.accent, 0.22);
-            let [pr, pg, pb, _] = prism_base.to_srgba_unmultiplied();
-            let prism_c = Color32::from_rgba_unmultiplied(pr, pg, pb, (50.0 * p_alpha) as u8);
-            for (x, c) in [(x0, c_edge), (mid_x, prism_c), (x1, c_edge)] {
-                prism_mesh.colored_vertex(pos2(x, py), c);
-                prism_mesh.colored_vertex(pos2(x, py + 0.8), c);
-            }
-            prism_mesh.add_triangle(0, 1, 2);
-            prism_mesh.add_triangle(1, 2, 3);
-            prism_mesh.add_triangle(2, 3, 4);
-            prism_mesh.add_triangle(3, 4, 5);
-            painter.add(Shape::mesh(prism_mesh));
-        }
-
-        // Dynamic fluid shimmer glint across the pill
-        let pill_shimmer_t = (time * 0.7).sin() as f32 * 0.5 + 0.5;
-        if x1 > x0 + 30.0 {
-            let span = x1 - x0;
-            let cx = x0 + span * pill_shimmer_t;
-            let w = (span * 0.25).max(20.0);
-            let s_min = (cx - w * 0.5).max(x0);
-            let s_max = (cx + w * 0.5).min(x1);
-            if s_max > s_min + 4.0 && cx > s_min && cx < s_max {
-                let glint_c = Color32::from_rgba_unmultiplied(255, 255, 255, (60.0 * p_alpha) as u8);
-                let y = rect.min.y + 0.8;
-                let mut glint_mesh = Mesh::default();
-                for (x, c) in [(s_min, Color32::TRANSPARENT), (cx, glint_c), (s_max, Color32::TRANSPARENT)] {
-                    glint_mesh.colored_vertex(pos2(x, y), c);
-                    glint_mesh.colored_vertex(pos2(x, y + 1.2), c);
-                }
-                glint_mesh.add_triangle(0, 1, 2);
-                glint_mesh.add_triangle(1, 2, 3);
-                glint_mesh.add_triangle(2, 3, 4);
-                glint_mesh.add_triangle(3, 4, 5);
-                painter.add(Shape::mesh(glint_mesh));
-            }
-        }
-
-        // Subtle bottom bounce reflection (liquid light gathering)
-        let bounce_rect = Rect::from_min_max(
-            pos2(rect.min.x + r, rect.max.y - 2.8),
-            pos2(rect.max.x - r, rect.max.y - 1.0),
+    if !composited {
+        let [top_r, side_r, bot_r] = theme.rim_stops_at(progress, shape.flat_top);
+        fresnel_rim_stroke(
+            painter,
+            shape.outline(),
+            with_alpha(top_r, opacity),
+            with_alpha(side_r, opacity),
+            with_alpha(bot_r, opacity),
+            1.2,
         );
-        if bounce_rect.width() > 0.0 && bounce_rect.height() > 0.0 {
-            painter.rect_filled(
-                bounce_rect,
-                1.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, (30.0 * p_alpha) as u8),
-            );
-        }
     }
 
-    // 2. In the expanding/expanded panel state:
-    // Fluid surface lens curve, caustic inner edge, and gentle specular wave.
-    let panel_stage = (progress / 0.35).clamp(0.0, 1.0);
-    if panel_stage > 0.01 {
-        let p_alpha = panel_stage * opacity;
-
-        // Subtle liquid sheen over the upper 38% of the panel
-        let sheen_h = (rect.height() * 0.38).min(180.0);
-        let top_c = if theme.dark {
-            Color32::from_rgba_unmultiplied(255, 255, 255, (34.0 * p_alpha) as u8)
-        } else {
-            Color32::from_rgba_unmultiplied(255, 255, 255, (75.0 * p_alpha) as u8)
-        };
-        let bot_c = Color32::from_rgba_unmultiplied(255, 255, 255, 0);
-
-        let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + sheen_h));
-        let sheen_shape = Squircle::new(sheen_rect, r).with_flat_top(shape.flat_top);
-        fill_gradient(painter, &sheen_shape.outline(), top_c, bot_c);
-
-        // Inner optical caustic refraction rim (inset 1.2px) with subtle accent integration
-        let inner_rect = rect.shrink(1.2);
-        if inner_rect.width() > 0.0 && inner_rect.height() > 0.0 {
-            let inner_shape = Squircle::new(inner_rect, (r - 1.2).max(4.0))
+    // Settled expanded panel interior optical dome (inset 2.0px so it never touches the outer edge)
+    let settled = ((progress - 0.72) / 0.26).clamp(0.0, 1.0) * opacity;
+    if settled > 0.01 {
+        let inner_rect = shape.rect.shrink(2.0);
+        if inner_rect.width() > 8.0 && inner_rect.height() > 8.0 {
+            let inner_shape = Squircle::new(inner_rect, (shape.radius - 2.0).max(4.0))
                 .with_exponent(shape.exponent)
                 .with_flat_top(shape.flat_top);
-            let caustic_base = mix(Color32::WHITE, theme.accent, 0.16);
-            let [cr, cg, cb, _] = caustic_base.to_srgba_unmultiplied();
-            let caustic_a = (if theme.dark { 28.0 } else { 60.0 } * p_alpha) as u8;
-            let caustic_c = Color32::from_rgba_unmultiplied(cr, cg, cb, caustic_a);
-            painter.add(PathShape::closed_line(
-                inner_shape.outline(),
-                PathStroke::new(1.0, caustic_c),
-            ));
-        }
-
-        // Fluid shimmering light wave across the top highlight
-        let shimmer_x_t = (time * 0.5).sin() as f32 * 0.5 + 0.5;
-        let x0 = rect.min.x + r;
-        let x1 = rect.max.x - r;
-        if x1 > x0 + 40.0 {
-            let span = x1 - x0;
-            let center_x = x0 + span * shimmer_x_t;
-            let width = (span * 0.32).max(35.0);
-            let s_min = (center_x - width * 0.5).max(x0);
-            let s_max = (center_x + width * 0.5).min(x1);
-            if s_max > s_min + 4.0 && center_x > s_min && center_x < s_max {
-                let wave_c = Color32::from_rgba_unmultiplied(255, 255, 255, (55.0 * p_alpha) as u8);
-                let y = rect.min.y + 0.8;
-                let mut mesh = Mesh::default();
-                for (x, c) in [
-                    (s_min, Color32::TRANSPARENT),
-                    (center_x, wave_c),
-                    (s_max, Color32::TRANSPARENT),
-                ] {
-                    mesh.colored_vertex(pos2(x, y), c);
-                    mesh.colored_vertex(pos2(x, y + 1.2), c);
-                }
-                mesh.add_triangle(0, 1, 2);
-                mesh.add_triangle(1, 2, 3);
-                mesh.add_triangle(2, 3, 4);
-                mesh.add_triangle(3, 4, 5);
-                painter.add(Shape::mesh(mesh));
-            }
-        }
-
-        // Bottom desk bounce light (optical depth)
-        let bounce_rect = Rect::from_min_max(
-            pos2(rect.min.x + r * 1.5, rect.max.y - 2.5),
-            pos2(rect.max.x - r * 1.5, rect.max.y - 0.8),
-        );
-        if bounce_rect.width() > 0.0 && bounce_rect.height() > 0.0 {
-            painter.rect_filled(
-                bounce_rect,
-                1.0,
-                Color32::from_rgba_unmultiplied(255, 255, 255, (22.0 * p_alpha) as u8),
-            );
+            let center_a = if theme.dark {
+                (26.0 * settled) as u8
+            } else {
+                (64.0 * settled) as u8
+            };
+            let edge_a = if theme.dark {
+                (10.0 * settled) as u8
+            } else {
+                (28.0 * settled) as u8
+            };
+            let top_center = if shape.flat_top {
+                Color32::from_rgba_unmultiplied(255, 255, 255, center_a / 2)
+            } else {
+                Color32::from_rgba_unmultiplied(255, 255, 255, center_a)
+            };
+            let top_edge = Color32::from_rgba_unmultiplied(255, 255, 255, edge_a);
+            fill_convex_sheen(painter, &inner_shape, 0.36, top_center, top_edge);
         }
     }
 }
 
-/// Curved liquid glass specular sheen and refractive optical bevel for bento tiles.
-pub fn tile_liquid_sheen(painter: &Painter, rect: Rect, theme: &Theme, lift: f32) {
+/// Curved liquid glass specular sheen, 2D Fresnel rim, and inner refractive thickness
+/// bevel for bento tiles and page cards.
+pub fn tile_liquid_sheen(painter: &Painter, rect: Rect, theme: &Theme, active: bool, lift: f32) {
     let r = TILE_RADIUS;
-    let h = (rect.height() * 0.46).min(48.0);
-    let sheen_rect = Rect::from_min_max(rect.min, pos2(rect.max.x, rect.min.y + h));
-    let s = Squircle::new(sheen_rect, (r - 0.5).max(4.0));
+    let shape = Squircle::new(rect, r);
 
-    let alpha_boost = 1.0 + lift * 0.6;
-    let top_a = if theme.dark {
-        (42.0 * alpha_boost).min(90.0) as u8
+    // 1. 2D Convex Specular Lens Dome over the upper 44% of the true tile Squircle
+    // (flush with the straight vertical walls; zero mid-tile rounded-bottom-corner artifact).
+    let boost = 1.0 + lift * 0.55;
+    let (center_a, edge_a) = if theme.dark {
+        (
+            ((if active { 44.0 } else { 32.0 }) * boost).min(78.0) as u8,
+            ((if active { 20.0 } else { 14.0 }) * boost).min(42.0) as u8,
+        )
     } else {
-        (95.0 * alpha_boost).min(170.0) as u8
+        (
+            ((if active { 96.0 } else { 78.0 }) * boost).min(155.0) as u8,
+            ((if active { 48.0 } else { 36.0 }) * boost).min(95.0) as u8,
+        )
     };
-
-    // Top convex specular meniscus
-    fill_gradient(
+    let dome_tint = if active {
+        mix(Color32::WHITE, theme.accent, 0.18)
+    } else {
+        Color32::WHITE
+    };
+    let [dr, dg, db, _] = dome_tint.to_srgba_unmultiplied();
+    fill_convex_sheen(
         painter,
-        &s.outline(),
-        Color32::from_rgba_unmultiplied(255, 255, 255, top_a),
-        Color32::from_rgba_unmultiplied(255, 255, 255, 0),
+        &shape,
+        0.44,
+        Color32::from_rgba_unmultiplied(dr, dg, db, center_a),
+        Color32::from_rgba_unmultiplied(dr, dg, db, edge_a),
     );
 
-    // Sharp specular hairline along the upper curve
-    let x0 = rect.min.x + r * 0.7;
-    let x1 = rect.max.x - r * 0.7;
-    if x1 > x0 + 10.0 {
-        let mut mesh = Mesh::default();
-        let y = rect.min.y + 0.8;
-        let mid_x = 0.5 * (x0 + x1);
-        let crest_a = if theme.dark {
-            (110.0 + lift * 80.0).min(220.0) as u8
-        } else {
-            (180.0 + lift * 60.0).min(255.0) as u8
-        };
-        let c_mid = Color32::from_rgba_unmultiplied(255, 255, 255, crest_a);
-        let c_edge = Color32::TRANSPARENT;
-        for (x, c) in [(x0, c_edge), (mid_x, c_mid), (x1, c_edge)] {
-            mesh.colored_vertex(pos2(x, y), c);
-            mesh.colored_vertex(pos2(x, y + 0.9), c);
-        }
-        mesh.add_triangle(0, 1, 2);
-        mesh.add_triangle(1, 2, 3);
-        mesh.add_triangle(2, 3, 4);
-        mesh.add_triangle(3, 4, 5);
-        painter.add(Shape::mesh(mesh));
-    }
+    // 2. Outer 2D Fresnel Specular & Caustic Rim (1.15px)
+    let caustic_rgb = mix(Color32::WHITE, theme.accent, if active { 0.48 } else { 0.30 });
+    let [cr, cg, cb, _] = caustic_rgb.to_srgba_unmultiplied();
+    let (top_rim_a, side_rim_a, bot_rim_a) = if theme.dark {
+        (
+            (88.0 + lift * 52.0 + if active { 24.0 } else { 0.0 }).min(185.0) as u8,
+            (22.0 + lift * 16.0 + if active { 14.0 } else { 0.0 }).min(70.0) as u8,
+            (46.0 + lift * 28.0 + if active { 26.0 } else { 0.0 }).min(115.0) as u8,
+        )
+    } else {
+        (
+            (185.0 + lift * 45.0).min(245.0) as u8,
+            (45.0 + lift * 25.0).min(95.0) as u8,
+            (85.0 + lift * 35.0).min(150.0) as u8,
+        )
+    };
+    fresnel_rim_stroke(
+        painter,
+        shape.outline(),
+        Color32::from_rgba_unmultiplied(255, 255, 255, top_rim_a),
+        Color32::from_rgba_unmultiplied(dr, dg, db, side_rim_a),
+        Color32::from_rgba_unmultiplied(cr, cg, cb, bot_rim_a),
+        1.15,
+    );
 
-    // Inner optical refractive chamfer stroke (1.0px inset)
+    // 3. Inner Optical Refractive Thickness Bevel (1.0px inset)
     let inner = rect.shrink(1.0);
-    if inner.width() > 0.0 && inner.height() > 0.0 {
+    if inner.width() > 4.0 && inner.height() > 4.0 {
         let inner_shape = Squircle::new(inner, (r - 1.0).max(2.0));
-        let bevel_base = mix(Color32::WHITE, theme.accent, lift * 0.22);
-        let [br, bg, bb, _] = bevel_base.to_srgba_unmultiplied();
-        let bevel_a = if theme.dark {
-            (24.0 + lift * 32.0).min(80.0) as u8
+        let (in_top_a, in_bot_a) = if theme.dark {
+            (
+                (22.0 + lift * 20.0).min(55.0) as u8,
+                (16.0 + lift * 14.0).min(42.0) as u8,
+            )
         } else {
-            (65.0 + lift * 35.0).min(140.0) as u8
+            (
+                (65.0 + lift * 30.0).min(120.0) as u8,
+                (28.0 + lift * 18.0).min(65.0) as u8,
+            )
         };
-        let bevel_c = Color32::from_rgba_unmultiplied(br, bg, bb, bevel_a);
-        painter.add(PathShape::closed_line(
+        fresnel_rim_stroke(
+            painter,
             inner_shape.outline(),
-            PathStroke::new(0.9, bevel_c),
-        ));
-    }
-
-    // Subtle bottom bounce highlight on the card
-    let bottom_hairline = Rect::from_min_max(
-        pos2(rect.min.x + r * 1.2, rect.max.y - 1.8),
-        pos2(rect.max.x - r * 1.2, rect.max.y - 0.8),
-    );
-    if bottom_hairline.width() > 0.0 && bottom_hairline.height() > 0.0 {
-        let bounce_a = (14.0 + lift * 18.0) as u8;
-        painter.rect_filled(
-            bottom_hairline,
-            0.5,
-            Color32::from_rgba_unmultiplied(255, 255, 255, bounce_a),
+            Color32::from_rgba_unmultiplied(cr, cg, cb, in_top_a),
+            Color32::TRANSPARENT,
+            Color32::from_rgba_unmultiplied(255, 255, 255, in_bot_a),
+            0.85,
         );
     }
 }
@@ -526,4 +492,60 @@ pub fn noise_texture(ctx: &Context) -> TextureHandle {
     );
     ctx.data_mut(|d| d.insert_temp(key, tex.clone()));
     tex
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::theme::{Look, Theme};
+    use egui::pos2;
+
+    #[test]
+    fn squircle_x_span_is_flush_with_vertical_walls_at_mid_height() {
+        let rect = Rect::from_min_max(pos2(10.0, 20.0), pos2(110.0, 120.0));
+        let shape = Squircle::new(rect, 14.0);
+        // At 44% height (y = 64.0), a mid-tile sheen slice must span the entire [10.0, 110.0] width
+        // with zero inward corner rounding.
+        let (x_l, x_r) = squircle_x_span(&shape, 64.0);
+        assert!((x_l - 10.0).abs() < 1e-4);
+        assert!((x_r - 110.0).abs() < 1e-4);
+
+        // Near the top corner (y = 22.0, inside top radius 14.0), the span narrows smoothly.
+        let (top_l, top_r) = squircle_x_span(&shape, 22.0);
+        assert!(top_l > 10.0 && top_r < 110.0);
+        assert!(((top_l - 10.0) - (110.0 - top_r)).abs() < 1e-4);
+    }
+
+    #[test]
+    fn squircle_x_span_respects_flat_top_notch() {
+        let rect = Rect::from_min_max(pos2(0.0, 0.0), pos2(200.0, 36.0));
+        let shape = Squircle::new(rect, 18.0).with_flat_top(true);
+        let (x_l, x_r) = squircle_x_span(&shape, 1.0);
+        assert!((x_l - 0.0).abs() < 1e-4);
+        assert!((x_r - 200.0).abs() < 1e-4);
+    }
+
+    #[test]
+    fn liquid_glass_optical_stops_have_clear_mid_lens_and_fresnel_rim() {
+        let look = Look {
+            liquid_glass: true,
+            ..Look::default()
+        };
+        let theme = Theme::styled(true, Color32::from_rgb(56, 189, 248), true, &look);
+        assert!(theme.liquid_glass);
+        let [top, upper_mid, lower_mid, bottom] = theme.glass_stops_at(1.0, false);
+        // In Liquid Glass mode, the upper-mid lens window is clearer (lower alpha) than the bottom caustic/grounding.
+        assert!(upper_mid.a() < bottom.a());
+        assert!(top.r() > lower_mid.r());
+
+        let [rim_top, rim_mid, rim_bot] = theme.rim_stops_at(1.0, false);
+        // Top and bottom Fresnel curves have stronger specular reflection than the vertical side walls.
+        assert!(rim_top.a() > rim_mid.a());
+        assert!(rim_bot.a() > rim_mid.a());
+
+        // In hardware Notch mode (flat_top = true) when collapsed (progress = 0.0),
+        // the top bezel stop is deep dark ink so it blends seamlessly with the screen bezel.
+        let [pill_top, _, _, _] = theme.glass_stops_at(0.0, true);
+        assert!(pill_top.r() <= 20 && pill_top.a() >= 215);
+    }
 }

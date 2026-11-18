@@ -60,8 +60,8 @@ pub fn model_dir() -> Option<PathBuf> {
                 .map(|a| a.join("assets").join("fontnet")),
         );
     }
-    if let Some(a) = std::env::var_os("APPDATA") {
-        dirs.push(PathBuf::from(a).join("Nook").join("fontnet"));
+    if let Some(cfg) = crate::files::config_dir() {
+        dirs.push(cfg.join("fontnet"));
     }
     dirs.into_iter()
         .find(|d| d.join(WEIGHTS).is_file() && d.join(CLASSES).is_file())

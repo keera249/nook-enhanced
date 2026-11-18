@@ -1,0 +1,10 @@
+id            = "dawwar"
+name          = "Dawwar"
+icon          = "aperture"
+size          = "wide"
+run           = ["python3", "dawwar_linux.py"]
+accepts_files = true
+page_size     = [596, 360]
+description   = "Dawwar file converter on Linux (images & media via ffmpeg / Python)."
+author        = "you"
+version       = "1.0.0"

@@ -74,7 +74,7 @@ pub(crate) fn human_size(bytes: u64) -> String {
 }
 
 fn shelf_file() -> Option<PathBuf> {
-    std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Nook").join("shelf.txt"))
+    nook_platform::files::config_dir().map(|d| d.join("shelf.txt"))
 }
 
 /// Paths on the shelf from `text` (one per line), dropping blanks.
@@ -251,7 +251,7 @@ impl FileShelf {
             Align2::CENTER_CENTER,
             match item.size {
                 Some(b) => human_size(b),
-                None if item.dir => "Folder".to_owned(),
+                None if item.dir => nook_ui::i18n::tr("Folder"),
                 None => String::new(),
             },
             Theme::font(SIZE_LABEL - 1.0),
@@ -283,7 +283,7 @@ impl FileShelf {
                 ),
                 true,
             );
-            if xr.on_hover_text("Remove from the shelf").clicked() {
+            if xr.on_hover_text(nook_ui::i18n::tr("Remove from the shelf")).clicked() {
                 return CardAction::Remove;
             }
         }
@@ -293,8 +293,9 @@ impl FileShelf {
             action = CardAction::Open;
         }
         resp.on_hover_text(format!(
-            "{}\nClick to open, drag to take it out",
-            item.path.display()
+            "{}\n{}",
+            item.path.display(),
+            nook_ui::i18n::tr("Click to open, drag to take it out")
         ));
         action
     }
@@ -308,7 +309,10 @@ enum CardAction {
 }
 
 fn one_line(ui: &Ui, pos: Pos2, text: &str, width: f32, font: egui::FontId, color: Color32) {
-    let mut job = LayoutJob::single_section(text.to_owned(), TextFormat::simple(font, color));
+    let mut job = LayoutJob::single_section(
+        nook_ui::arabic::shape_bidi(text),
+        TextFormat::simple(font, color),
+    );
     job.wrap = TextWrapping {
         max_width: width,
         max_rows: 1,
@@ -424,9 +428,9 @@ impl Module for FileShelf {
             self.open_page = true;
         }
         resp.on_hover_text(if count > 0 {
-            "Drag to take everything  \u{00B7}  Click to see the shelf"
+            nook_ui::i18n::tr("Drag to take everything  \u{00B7}  Click to see the shelf")
         } else {
-            "Drop files on the notch to park them here"
+            nook_ui::i18n::tr("Drop files on the notch to park them here")
         });
     }
 
@@ -434,7 +438,7 @@ impl Module for FileShelf {
         self.load_pending(ui.ctx());
         if !self.items.is_empty()
             && widgets::icon_button(header, icons::BROOM, 26.0, false, theme)
-                .on_hover_text("Clear the shelf (the files stay where they are)")
+                .on_hover_text(nook_ui::i18n::tr("Clear the shelf (the files stay where they are)"))
                 .clicked()
         {
             self.items.clear();
@@ -443,7 +447,7 @@ impl Module for FileShelf {
         if !self.items.is_empty() {
             let drag_all = widgets::icon_button(header, icons::HAND_GRABBING, 26.0, false, theme)
                 .interact(Sense::drag())
-                .on_hover_text("Drag to take everything");
+                .on_hover_text(nook_ui::i18n::tr("Drag to take everything"));
             if drag_all.drag_started() {
                 let all = self.items.iter().map(|i| i.path.clone()).collect();
                 self.drag_out(all);
@@ -471,9 +475,9 @@ impl Module for FileShelf {
                 body.center() + vec2(0.0, 16.0),
                 Align2::CENTER_CENTER,
                 if hovering {
-                    "Drop to park them here"
+                    nook_ui::i18n::tr("Drop to park them here")
                 } else {
-                    "Drop files on the notch to park them here."
+                    nook_ui::i18n::tr("Drop files on the notch to park them here.")
                 },
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,

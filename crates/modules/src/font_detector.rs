@@ -179,7 +179,7 @@ impl Module for FontDetector {
             self.copied = None;
         }
         if widgets::icon_button(header, icons::SELECTION, 26.0, false, theme)
-            .on_hover_text("Detect again (Ctrl+Alt+F)")
+            .on_hover_text(nook_ui::i18n::tr("Detect again (Ctrl+Alt+F)"))
             .clicked()
         {
             self.start();
@@ -188,8 +188,9 @@ impl Module for FontDetector {
         let Some(d) = self.last.clone() else {
             let msg = self
                 .error
-                .clone()
-                .unwrap_or_else(|| "Drag over some text to find its font".into());
+                .as_deref()
+                .map(nook_ui::i18n::tr)
+                .unwrap_or_else(|| nook_ui::i18n::tr("Drag over some text to find its font"));
             painter.text(
                 body.center(),
                 Align2::CENTER_CENTER,
@@ -222,9 +223,9 @@ impl Module for FontDetector {
             );
         }
         let quote = if d.text.is_empty() {
-            "Text not readable, matched by shape only".to_owned()
+            nook_ui::i18n::tr("Text not readable, matched by shape only")
         } else {
-            format!("\u{201C}{}\u{201D}", d.text)
+            nook_ui::arabic::shape_bidi(&format!("\u{201C}{}\u{201D}", d.text))
         };
         let galley = painter.layout(
             quote,
@@ -241,7 +242,7 @@ impl Module for FontDetector {
             painter.text(
                 pos2(inner.min.x, inner.min.y),
                 Align2::LEFT_TOP,
-                e,
+                nook_ui::i18n::tr(e),
                 Theme::font(SIZE_LABEL - 1.0),
                 theme.text_faint,
             );
@@ -257,7 +258,7 @@ impl Module for FontDetector {
             );
             let resp = ui
                 .interact(row, ui.id().with(("font-row", i)), Sense::click())
-                .on_hover_text("Copy name");
+                .on_hover_text(nook_ui::i18n::tr("Copy name"));
             let fill = if i == 0 {
                 with_alpha(theme.accent, 0.22)
             } else if resp.hovered() {
@@ -286,9 +287,9 @@ impl Module for FontDetector {
                     .x;
             // Lens also names open-source fonts that are not on this PC.
             let note = match (m.style, m.source) {
-                (_, fontmatch::Source::Lens) => Some("Not installed"),
+                (_, fontmatch::Source::Lens) => Some(nook_ui::i18n::tr("Not installed")),
                 (fontmatch::FontStyle::Regular, _) => None,
-                (style, _) => Some(style.label()),
+                (style, _) => Some(nook_ui::i18n::tr(style.label())),
             };
             if let Some(note) = note {
                 painter.text(
@@ -300,7 +301,7 @@ impl Module for FontDetector {
                 );
             }
             let right_text = if self.copied.is_some_and(|(c, _)| c == i) {
-                "Copied".to_owned()
+                nook_ui::i18n::tr("Copied")
             } else {
                 format!("{:.0}%", m.score * 100.0)
             };

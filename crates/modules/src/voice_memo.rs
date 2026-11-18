@@ -360,9 +360,9 @@ impl VoiceMemo {
             },
         );
         let status = if recording {
-            "Recording".to_owned()
+            nook_ui::i18n::tr("Recording")
         } else {
-            "Ready".to_owned()
+            nook_ui::i18n::tr("Ready")
         };
         let pulse = if recording {
             0.5 + 0.5 * (ui.input(|i| i.time) as f32 * 4.0).sin()
@@ -598,11 +598,15 @@ impl VoiceMemo {
                         theme.text,
                     );
                     let detail = match playing {
-                        Some((_, at, secs)) => format!(
-                            "{} of {}",
-                            clock(at.elapsed().as_secs_f32().min(*secs)),
-                            clock(*secs)
-                        ),
+                        Some((_, at, secs)) => {
+                            let cur = clock(at.elapsed().as_secs_f32().min(*secs));
+                            let tot = clock(*secs);
+                            if nook_ui::i18n::is_arabic() {
+                                nook_ui::arabic::shape_bidi(&format!("{cur} من {tot}"))
+                            } else {
+                                format!("{cur} of {tot}")
+                            }
+                        }
                         None => format!("{}  \u{00B7}  {}", clock(m.secs), human_size(m.bytes)),
                     };
                     ui.painter().text(
@@ -658,7 +662,7 @@ impl VoiceMemo {
                     if !hovered {
                         continue;
                     }
-                    resp.on_hover_text("Drag into a chat or an email");
+                    resp.on_hover_text(nook_ui::i18n::tr("Drag into a chat or an email"));
                 }
             });
 
@@ -876,7 +880,7 @@ impl Module for VoiceMemo {
             && at.elapsed().as_secs_f32() < 3.0
         {
             header.label(
-                egui::RichText::new(t.as_str())
+                egui::RichText::new(nook_ui::i18n::tr(t.as_str()))
                     .font(Theme::font(SIZE_LABEL))
                     .color(theme.accent_fg()),
             );

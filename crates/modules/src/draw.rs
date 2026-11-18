@@ -230,7 +230,7 @@ impl Draw {
                 ];
                 for (tool, glyph, tip) in tools {
                     if button_at(ui, pos2(x, cy), 32.0, glyph, self.tool == tool, theme)
-                        .on_hover_text(tip)
+                        .on_hover_text(nook_ui::i18n::tr(tip))
                         .clicked()
                     {
                         self.tool = tool;
@@ -264,7 +264,7 @@ impl Draw {
                 }
                 x += 6.0;
                 if button_at(ui, pos2(x, cy), 32.0, icons::ARROW_U_UP_LEFT, false, theme)
-                    .on_hover_text("Undo (Ctrl+Z)")
+                    .on_hover_text(nook_ui::i18n::tr("Undo (Ctrl+Z)"))
                     .clicked()
                     && let Some(c) = &self.canvas
                 {
@@ -272,7 +272,7 @@ impl Draw {
                 }
                 x += 36.0;
                 if button_at(ui, pos2(x, cy), 32.0, icons::TRASH, false, theme)
-                    .on_hover_text("Clear")
+                    .on_hover_text(nook_ui::i18n::tr("Clear"))
                     .clicked()
                     && let Some(c) = &self.canvas
                 {

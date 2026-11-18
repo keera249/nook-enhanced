@@ -1,0 +1,9 @@
+id          = "volume-mixer"
+name        = "App Volume Mixer"
+icon        = "faders"
+size        = "small"
+run         = ["python3", "mixer_linux.py"]
+page_size   = [568, 360]
+description = "Per-app volume mixer on Linux (PipeWire / PulseAudio via pactl): control or mute each open app individually."
+author      = "you"
+version     = "1.0.0"

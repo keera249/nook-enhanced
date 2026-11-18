@@ -852,8 +852,12 @@ impl Calculator {
                 .font(Theme::font(SIZE_BODY + 4.0))
                 .text_color(theme.text_dim)
                 .hint_text(
-                    egui::RichText::new("Type a sum, e.g. 12% of 80 or 5 km to mi")
-                        .color(theme.text_faint),
+                    egui::RichText::new(if nook_ui::i18n::is_arabic() {
+                        nook_ui::arabic::shape_bidi("اكتب معادلة، مثل: 12% of 80 أو 5 km to mi")
+                    } else {
+                        "Type a sum, e.g. 12% of 80 or 5 km to mi".to_owned()
+                    })
+                    .color(theme.text_faint),
                 )
                 .desired_width(field.width()),
         );
@@ -907,7 +911,11 @@ impl Calculator {
                 let copy =
                     Rect::from_center_size(pos2(inner.min.x + 10.0, result_y), vec2(24.0, 24.0));
                 if kit::icon_at(ui, copy.center(), 24.0, icons::COPY, false, theme)
-                    .on_hover_text("Copy the answer")
+                    .on_hover_text(if nook_ui::i18n::is_arabic() {
+                        nook_ui::arabic::shape_bidi("نسخ النتيجة")
+                    } else {
+                        "Copy the answer".to_owned()
+                    })
                     .clicked()
                 {
                     let _ = clipboard::copy_text(&raw_num(v));
@@ -917,7 +925,7 @@ impl Calculator {
                 ui.painter().text(
                     pos2(inner.max.x, result_y),
                     Align2::RIGHT_CENTER,
-                    e,
+                    nook_ui::i18n::tr(&e),
                     Theme::font(SIZE_BODY),
                     theme.text_faint,
                 );
@@ -976,7 +984,11 @@ impl Calculator {
             ui.painter().text(
                 list.center() - vec2(0.0, 20.0),
                 Align2::CENTER_CENTER,
-                "Press Enter to keep an answer",
+                if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi("اضغط Enter لحفظ النتيجة في السجل")
+                } else {
+                    "Press Enter to keep an answer".to_owned()
+                },
                 Theme::font(SIZE_LABEL),
                 theme.text_faint,
             );
@@ -1003,7 +1015,11 @@ impl Calculator {
                         continue;
                     }
                     let resp = kit::row(ui, r, Id::new(("calc-row", i)), false, theme)
-                        .on_hover_text("Click to use  \u{00B7}  Right click to copy");
+                        .on_hover_text(if nook_ui::i18n::is_arabic() {
+                            nook_ui::arabic::shape_bidi("انقر للاستخدام  ·  زر أيمن للنسخ")
+                        } else {
+                            "Click to use  \u{00B7}  Right click to copy".to_owned()
+                        });
                     kit::one_line(
                         ui,
                         pos2(r.min.x + 10.0, r.min.y + 4.0),
@@ -1166,7 +1182,11 @@ impl Module for Calculator {
             let last = self
                 .history
                 .first()
-                .map_or("Type a sum".to_owned(), |e| e.result.clone());
+                .map_or(if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi("اكتب معادلة")
+                } else {
+                    "Type a sum".to_owned()
+                }, |e| e.result.clone());
             kit::one_line(
                 ui,
                 pos2(rect.min.x, rect.min.y + 21.0),
@@ -1186,7 +1206,11 @@ impl Module for Calculator {
             return;
         }
         if kit::tool_tile(ui, ctx, icons::CALCULATOR, false)
-            .on_hover_text("Calculator and unit converter  \u{00B7}  Ctrl+Alt+K")
+            .on_hover_text(if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi("الآلة الحاسبة ومحول الوحدات  ·  Ctrl+Alt+K")
+            } else {
+                "Calculator and unit converter  \u{00B7}  Ctrl+Alt+K".to_owned()
+            })
             .clicked()
         {
             self.open_page = true;
@@ -1197,7 +1221,7 @@ impl Module for Calculator {
     fn ui_page(&mut self, ui: &mut Ui, header: &mut Ui, body: Rect, theme: &Theme) -> bool {
         if !self.history.is_empty()
             && widgets::icon_button(header, icons::BROOM, 26.0, false, theme)
-                .on_hover_text("Clear the history")
+                .on_hover_text(nook_ui::i18n::tr("Clear history"))
                 .clicked()
         {
             self.history.clear();
@@ -1205,7 +1229,11 @@ impl Module for Calculator {
         }
         let mut sel = usize::from(self.angle == Angle::Rad);
         if widgets::segmented(header, &["DEG", "RAD"], &mut sel, theme)
-            .on_hover_text("Angles for sin, cos and tan")
+            .on_hover_text(if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi("وحدة الزوايا للدوال المثلثية sin و cos و tan")
+            } else {
+                "Angles for sin, cos and tan".to_owned()
+            })
             .changed()
         {
             self.angle = if sel == 1 { Angle::Rad } else { Angle::Deg };

@@ -57,45 +57,44 @@ pub enum Status {
 /// scrcpy, wherever it was installed: Nook's own folder, next to nook.exe,
 /// PATH (WinGet links), WinGet's package folder, Scoop, Chocolatey.
 pub fn find_scrcpy() -> Option<PathBuf> {
+    let exe_name = if cfg!(windows) { "scrcpy.exe" } else { "scrcpy" };
     let mut candidates: Vec<PathBuf> = Vec::new();
-    if let Some(a) = std::env::var_os("APPDATA") {
-        candidates.push(
-            PathBuf::from(a)
-                .join("Nook")
-                .join("scrcpy")
-                .join("scrcpy.exe"),
-        );
+    if let Some(cfg) = nook_platform::files::config_dir() {
+        candidates.push(cfg.join("scrcpy").join(exe_name));
     }
     if let Some(dir) = std::env::current_exe()
         .ok()
         .and_then(|e| e.parent().map(Path::to_path_buf))
     {
-        candidates.push(dir.join("scrcpy").join("scrcpy.exe"));
-        candidates.push(dir.join("scrcpy.exe"));
+        candidates.push(dir.join("scrcpy").join(exe_name));
+        candidates.push(dir.join(exe_name));
     }
-    candidates.extend(on_path("scrcpy.exe"));
-    if let Some(l) = std::env::var_os("LOCALAPPDATA") {
-        let pkgs = PathBuf::from(l)
-            .join("Microsoft")
-            .join("WinGet")
-            .join("Packages");
-        candidates.extend(find_below(&pkgs, "Genymobile.scrcpy", "scrcpy.exe"));
+    candidates.extend(on_path(exe_name));
+    #[cfg(windows)]
+    {
+        if let Some(l) = std::env::var_os("LOCALAPPDATA") {
+            let pkgs = PathBuf::from(l)
+                .join("Microsoft")
+                .join("WinGet")
+                .join("Packages");
+            candidates.extend(find_below(&pkgs, "Genymobile.scrcpy", "scrcpy.exe"));
+        }
+        if let Some(u) = std::env::var_os("USERPROFILE") {
+            candidates.push(
+                PathBuf::from(u)
+                    .join("scoop")
+                    .join("apps")
+                    .join("scrcpy")
+                    .join("current")
+                    .join("scrcpy.exe"),
+            );
+        }
+        candidates.extend(find_below(
+            Path::new(r"C:\ProgramData\chocolatey\lib"),
+            "scrcpy",
+            "scrcpy.exe",
+        ));
     }
-    if let Some(u) = std::env::var_os("USERPROFILE") {
-        candidates.push(
-            PathBuf::from(u)
-                .join("scoop")
-                .join("apps")
-                .join("scrcpy")
-                .join("current")
-                .join("scrcpy.exe"),
-        );
-    }
-    candidates.extend(find_below(
-        Path::new(r"C:\ProgramData\chocolatey\lib"),
-        "scrcpy",
-        "scrcpy.exe",
-    ));
     candidates
         .into_iter()
         .find(|p| p.is_file())
@@ -106,18 +105,19 @@ pub fn find_scrcpy() -> Option<PathBuf> {
 /// The adb to use: the one shipped with scrcpy (scrcpy restarts a server of
 /// another version), else one on PATH or in the Android SDK.
 pub fn find_adb(scrcpy: Option<&Path>) -> Option<PathBuf> {
+    let exe_name = if cfg!(windows) { "adb.exe" } else { "adb" };
     let mut candidates: Vec<PathBuf> = Vec::new();
     if let Some(dir) = scrcpy.and_then(Path::parent) {
-        candidates.push(dir.join("adb.exe"));
+        candidates.push(dir.join(exe_name));
     }
-    candidates.extend(on_path("adb.exe"));
+    candidates.extend(on_path(exe_name));
     if let Some(l) = std::env::var_os("LOCALAPPDATA") {
         candidates.push(
             PathBuf::from(l)
                 .join("Android")
                 .join("Sdk")
                 .join("platform-tools")
-                .join("adb.exe"),
+                .join(exe_name),
         );
     }
     candidates.into_iter().find(|p| p.is_file())
@@ -161,16 +161,26 @@ fn find_below(root: &Path, prefix: &str, file: &str) -> Vec<PathBuf> {
 
 /// Opens a console that installs scrcpy (and its adb) with WinGet.
 pub fn install_with_winget() -> std::io::Result<()> {
-    use std::os::windows::process::CommandExt;
-    const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
-    Command::new("cmd.exe")
-        .args([
-            "/c",
-            "winget install --id Genymobile.scrcpy -e --accept-source-agreements & pause",
-        ])
-        .creation_flags(CREATE_NEW_CONSOLE)
-        .spawn()
-        .map(|_| ())
+    #[cfg(windows)]
+    {
+        use std::os::windows::process::CommandExt;
+        const CREATE_NEW_CONSOLE: u32 = 0x0000_0010;
+        return Command::new("cmd.exe")
+            .args([
+                "/c",
+                "winget install --id Genymobile.scrcpy -e --accept-source-agreements & pause",
+            ])
+            .creation_flags(CREATE_NEW_CONSOLE)
+            .spawn()
+            .map(|_| ());
+    }
+    #[cfg(not(windows))]
+    {
+        Err(std::io::Error::new(
+            std::io::ErrorKind::Unsupported,
+            "install scrcpy via your Linux package manager (e.g. sudo apt install scrcpy)",
+        ))
+    }
 }
 
 impl Mirror {
@@ -185,8 +195,6 @@ impl Mirror {
         aspect: f32,
         ctx: &egui::Context,
     ) -> std::io::Result<Self> {
-        use std::os::windows::process::CommandExt;
-        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
         let title = format!("Nook mirror {}", super::localsend::random_hex(4));
         let (x, y, w, h) = rect;
         let mut cmd = Command::new(scrcpy);
@@ -219,8 +227,13 @@ impl Mirror {
             .env("SDL_WINDOWS_DPI_SCALING", "0")
             .stdin(Stdio::null())
             .stdout(Stdio::piped())
-            .stderr(Stdio::piped())
-            .creation_flags(CREATE_NO_WINDOW);
+            .stderr(Stdio::piped());
+        #[cfg(windows)]
+        {
+            use std::os::windows::process::CommandExt;
+            const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+            cmd.creation_flags(CREATE_NO_WINDOW);
+        }
         if let Some(dir) = scrcpy.parent() {
             cmd.current_dir(dir);
         }

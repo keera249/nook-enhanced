@@ -70,7 +70,7 @@ struct Settings {
 
 impl Settings {
     fn file() -> Option<PathBuf> {
-        std::env::var_os("APPDATA").map(|a| PathBuf::from(a).join("Nook").join("phone.txt"))
+        nook_platform::files::config_dir().map(|d| d.join("phone.txt"))
     }
 
     fn load() -> Self {
@@ -609,7 +609,7 @@ fn button(
     };
     painter.rect_filled(r, r.height() * 0.5, fill);
     let font = Theme::font_semibold(SIZE_LABEL);
-    let galley = painter.layout_no_wrap(label.to_owned(), font, fg);
+    let galley = painter.layout_no_wrap(nook_ui::i18n::tr(label), font, fg);
     let icon_w = if icon.is_some() { 18.0 } else { 0.0 };
     let x0 = r.center().x - (galley.size().x + icon_w) * 0.5;
     if let Some(i) = icon {
@@ -625,8 +625,10 @@ fn button(
 
 /// Text cut to one line (`…` at the end).
 fn one_line(ui: &Ui, pos: Pos2, text: &str, width: f32, font: FontId, color: Color32) -> Rect {
-    let mut job =
-        LayoutJob::single_section(text.replace('\n', " "), TextFormat::simple(font, color));
+    let mut job = LayoutJob::single_section(
+        nook_ui::i18n::tr(&text.replace('\n', " ")),
+        TextFormat::simple(font, color),
+    );
     job.wrap = TextWrapping {
         max_width: width.max(1.0),
         max_rows: 1,
@@ -649,7 +651,10 @@ fn lines(
     font: FontId,
     color: Color32,
 ) -> f32 {
-    let mut job = LayoutJob::single_section(text.to_owned(), TextFormat::simple(font, color));
+    let mut job = LayoutJob::single_section(
+        nook_ui::i18n::tr(text),
+        TextFormat::simple(font, color),
+    );
     job.wrap = TextWrapping {
         max_width: width.max(1.0),
         max_rows: rows,
@@ -697,11 +702,20 @@ fn ago(when_ms: i64) -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map_or(0, |d| d.as_millis() as i64);
     let s = ((now - when_ms) / 1000).max(0);
-    match s {
-        0..=59 => "now".into(),
-        60..=3599 => format!("{}m", s / 60),
-        3600..=86399 => format!("{}h", s / 3600),
-        _ => format!("{}d", s / 86400),
+    if nook_ui::i18n::is_arabic() {
+        match s {
+            0..=59 => "الآن".into(),
+            60..=3599 => format!("{}د", s / 60),
+            3600..=86399 => format!("{}س", s / 3600),
+            _ => format!("{}ي", s / 86400),
+        }
+    } else {
+        match s {
+            0..=59 => "now".into(),
+            60..=3599 => format!("{}m", s / 60),
+            3600..=86399 => format!("{}h", s / 3600),
+            _ => format!("{}d", s / 86400),
+        }
     }
 }
 
@@ -760,7 +774,7 @@ impl PhoneLink {
             ui.painter().text(
                 rect.center(),
                 Align2::CENTER_CENTER,
-                "Starting mirror…",
+                nook_ui::i18n::tr("Starting mirror…"),
                 Theme::font(SIZE_LABEL),
                 Color32::from_gray(170),
             );
@@ -776,14 +790,22 @@ impl PhoneLink {
         if resp.clicked() && !controlling {
             m.set_control(true, Some(&ctx));
         }
-        resp.on_hover_text("Click to control your phone with the mouse and keyboard");
+        resp.on_hover_text(nook_ui::i18n::tr(
+            "Click to control your phone with the mouse and keyboard",
+        ));
     }
 
     fn device_card(&mut self, ui: &mut Ui, area: Rect, theme: &Theme) {
         let c = area.center();
         let painter = ui.painter().clone();
         let center_text = |y: f32, text: &str, font: FontId, color: Color32| {
-            painter.text(pos2(c.x, y), Align2::CENTER_CENTER, text, font, color);
+            painter.text(
+                pos2(c.x, y),
+                Align2::CENTER_CENTER,
+                nook_ui::i18n::tr(text),
+                font,
+                color,
+            );
         };
         if self.adb_missing && self.scrcpy.is_none() {
             paint::icon(
@@ -1014,7 +1036,7 @@ impl PhoneLink {
         for (i, (glyph, tip, code)) in keys.iter().enumerate() {
             let cx = row.min.x + step * (i as f32 + 0.5);
             if icon_at(ui, pos2(cx, cy), size, glyph, false, theme)
-                .on_hover_text(*tip)
+                .on_hover_text(nook_ui::i18n::tr(*tip))
                 .clicked()
             {
                 self.key(*code);
@@ -1023,9 +1045,9 @@ impl PhoneLink {
         if mirroring {
             let cx = row.min.x + step * (keys.len() as f32 + 0.5);
             let tip = if controlling {
-                "Controlling: press Esc to give the mouse and keyboard back"
+                nook_ui::i18n::tr("Controlling: press Esc to give the mouse and keyboard back")
             } else {
-                "Control with mouse and keyboard (Esc to stop)"
+                nook_ui::i18n::tr("Control with mouse and keyboard (Esc to stop)")
             };
             if icon_at(
                 ui,
@@ -1043,7 +1065,7 @@ impl PhoneLink {
             }
             let cx = row.min.x + step * (keys.len() as f32 + 1.5);
             if icon_at(ui, pos2(cx, cy), size, icons::STOP, false, theme)
-                .on_hover_text("Stop mirroring")
+                .on_hover_text(nook_ui::i18n::tr("Stop mirroring"))
                 .clicked()
             {
                 self.mirror = None;
@@ -1077,26 +1099,34 @@ impl PhoneLink {
                 theme.accent_fg(),
                 true,
             );
+            let want_line = if nook_ui::i18n::is_arabic() {
+                format!("{} يريد إرسال ملفات إليك", t.peer)
+            } else {
+                format!("{} wants to send you", t.peer)
+            };
             one_line(
                 ui,
                 pos2(x0 + 40.0, y + 14.0),
-                &format!("{} wants to send you", t.peer),
+                &want_line,
                 w - 220.0,
                 Theme::font_semibold(SIZE_BODY),
                 theme.text,
             );
             let summary = match t.files.as_slice() {
                 [(name, size)] => format!("{name}  ·  {}", human_size(*size)),
-                list => format!(
-                    "{} files  ·  {}  ·  {}",
-                    list.len(),
-                    human_size(t.total),
-                    list.iter()
+                list => {
+                    let names = list
+                        .iter()
                         .take(3)
                         .map(|f| f.0.as_str())
                         .collect::<Vec<_>>()
-                        .join(", ")
-                ),
+                        .join(", ");
+                    if nook_ui::i18n::is_arabic() {
+                        format!("{} ملفات  ·  {}  ·  {names}", list.len(), human_size(t.total))
+                    } else {
+                        format!("{} files  ·  {}  ·  {names}", list.len(), human_size(t.total))
+                    }
+                }
             };
             one_line(
                 ui,
@@ -1121,10 +1151,15 @@ impl PhoneLink {
         if let Some((peer, _, pin)) = &mut self.pin {
             let card = Rect::from_min_size(pos2(x0, y), vec2(w, 52.0));
             widgets::card(ui.painter(), card, theme);
+            let pin_ask = if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi(&format!("{} يطلب رمز PIN", peer.alias))
+            } else {
+                format!("{} asks for a PIN", peer.alias)
+            };
             ui.painter().text(
                 pos2(x0 + 14.0, card.center().y),
                 Align2::LEFT_CENTER,
-                format!("{} asks for a PIN", peer.alias),
+                pin_ask,
                 Theme::font_semibold(SIZE_LABEL + 1.0),
                 theme.text,
             );
@@ -1132,7 +1167,7 @@ impl PhoneLink {
             ui.put(
                 field,
                 egui::TextEdit::singleline(pin)
-                    .hint_text("PIN")
+                    .hint_text(nook_ui::i18n::tr("PIN"))
                     .password(true)
                     .desired_width(field.width()),
             );
@@ -1172,7 +1207,9 @@ impl PhoneLink {
             false,
             theme,
         )
-        .on_hover_text("Look for devices again (also scans the whole network)");
+        .on_hover_text(nook_ui::i18n::tr(
+            "Look for devices again (also scans the whole network)",
+        ));
         if refresh.clicked() {
             self.rescan();
         }
@@ -1180,7 +1217,7 @@ impl PhoneLink {
             ui.painter().text(
                 pos2(x, cy),
                 Align2::LEFT_CENTER,
-                "Looking for devices with LocalSend open…",
+                nook_ui::i18n::tr("Looking for devices with LocalSend open…"),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
             );
@@ -1291,7 +1328,11 @@ impl PhoneLink {
             hovering,
         );
         let title = match (&target, hovering) {
+            (Some(t), true) if nook_ui::i18n::is_arabic() => format!("أفلت للإرسال إلى {t}"),
             (Some(t), true) => format!("Drop to send to {t}"),
+            (Some(t), false) if nook_ui::i18n::is_arabic() => {
+                format!("أفلت الملفات هنا لإرسالها إلى {t}")
+            }
             (Some(t), false) => format!("Drop files here to send to {t}"),
             (None, _) => "Drop files here".to_owned(),
         };
@@ -1337,7 +1378,9 @@ impl PhoneLink {
             false,
             theme,
         )
-        .on_hover_text("Send the text on your clipboard as a message")
+        .on_hover_text(nook_ui::i18n::tr(
+            "Send the text on your clipboard as a message",
+        ))
         .clicked()
         {
             match (clipboard::read_text(), self.target().cloned(), &self.ls) {
@@ -1356,7 +1399,7 @@ impl PhoneLink {
             ui.painter().text(
                 pos2(list.center().x, list.min.y + 40.0),
                 Align2::CENTER_CENTER,
-                "Transfers and messages show up here.",
+                nook_ui::i18n::tr("Transfers and messages show up here."),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_faint,
             );
@@ -1393,10 +1436,15 @@ impl PhoneLink {
                         theme.accent_fg(),
                         true,
                     );
+                    let msg_from = if nook_ui::i18n::is_arabic() {
+                        format!("رسالة من {}", m.from)
+                    } else {
+                        format!("Message from {}", m.from)
+                    };
                     one_line(
                         ui,
                         pos2(card.min.x + 36.0, card.min.y + 9.0),
-                        &format!("Message from {}", m.from),
+                        &msg_from,
                         card.width() - 120.0,
                         Theme::font_semibold(SIZE_LABEL),
                         theme.text_dim,
@@ -1418,7 +1466,7 @@ impl PhoneLink {
                         false,
                         theme,
                     )
-                    .on_hover_text("Copy")
+                    .on_hover_text(nook_ui::i18n::tr("Copy"))
                     .clicked()
                     {
                         copy = Some(m.text.clone());
@@ -1431,7 +1479,7 @@ impl PhoneLink {
                         false,
                         theme,
                     )
-                    .on_hover_text("Dismiss")
+                    .on_hover_text(nook_ui::i18n::tr("Dismiss"))
                     .clicked()
                     {
                         dismiss_msg = Some(i);
@@ -1482,7 +1530,7 @@ impl PhoneLink {
             ui.painter().text(
                 c + vec2(0.0, 10.0),
                 Align2::CENTER_CENTER,
-                "Connect your phone over USB or Wi-Fi to see its notifications.",
+                nook_ui::i18n::tr("Connect your phone over USB or Wi-Fi to see its notifications."),
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
             );
@@ -1502,9 +1550,9 @@ impl PhoneLink {
                 c + vec2(0.0, 10.0),
                 Align2::CENTER_CENTER,
                 if self.notifs_loaded {
-                    "No notifications. All caught up."
+                    nook_ui::i18n::tr("No notifications. All caught up.")
                 } else {
-                    "Reading notifications…"
+                    nook_ui::i18n::tr("Reading notifications…")
                 },
                 Theme::font(SIZE_LABEL + 1.0),
                 theme.text_dim,
@@ -1580,7 +1628,7 @@ impl PhoneLink {
                         theme.text_dim,
                     );
                     if resp
-                        .on_hover_text("Open on the phone and mirror it")
+                        .on_hover_text(nook_ui::i18n::tr("Open on the phone and mirror it"))
                         .clicked()
                     {
                         open = Some(n.package.clone());
@@ -1608,17 +1656,47 @@ impl PhoneLink {
                 ui.spacing_mut().item_spacing.y = 8.0;
                 let heading = |ui: &mut Ui, text: &str| {
                     ui.add_space(2.0);
-                    ui.label(egui::RichText::new(text).font(Theme::font_semibold(SIZE_LABEL)).color(theme.text_faint));
+                    ui.label(
+                        egui::RichText::new(nook_ui::i18n::tr(text))
+                            .font(Theme::font_semibold(SIZE_LABEL))
+                            .color(theme.text_faint),
+                    );
                 };
                 let dim = |ui: &mut Ui, text: &str| {
-                    ui.label(egui::RichText::new(text).font(Theme::font(SIZE_LABEL)).color(theme.text_dim));
+                    ui.label(
+                        egui::RichText::new(nook_ui::i18n::tr(text))
+                            .font(Theme::font(SIZE_LABEL))
+                            .color(theme.text_dim),
+                    );
                 };
 
                 heading(ui, "RECEIVING FILES");
                 match &self.ls {
                     Some(ls) => match &ls.server_error {
-                        None => dim(ui, &format!("Visible as \"{}\" on port {}. Allow Nook through the Windows firewall if asked.", ls.alias(), ls.port())),
-                        Some(e) => dim(ui, &format!("Receiving is off: {e}")),
+                        None => {
+                            let msg = if nook_ui::i18n::is_arabic() {
+                                format!(
+                                    "مرئي باسم \"{}\" على المنفذ {}. اسمح لـ Nook عبر جدار حماية ويندوز عند الطلب.",
+                                    ls.alias(),
+                                    ls.port()
+                                )
+                            } else {
+                                format!(
+                                    "Visible as \"{}\" on port {}. Allow Nook through the Windows firewall if asked.",
+                                    ls.alias(),
+                                    ls.port()
+                                )
+                            };
+                            dim(ui, &msg);
+                        }
+                        Some(e) => {
+                            let msg = if nook_ui::i18n::is_arabic() {
+                                format!("الاستقبال متوقف: {e}")
+                            } else {
+                                format!("Receiving is off: {e}")
+                            };
+                            dim(ui, &msg);
+                        }
                     },
                     None => dim(ui, "Starting…"),
                 }
@@ -1632,13 +1710,22 @@ impl PhoneLink {
                 }
                 ui.horizontal(|ui| {
                     let path = self.settings.save_dir.display().to_string();
-                    ui.label(egui::RichText::new(format!("Save to  {path}")).font(Theme::font(SIZE_LABEL)).color(theme.text));
+                    let save_to_msg = if nook_ui::i18n::is_arabic() {
+                        nook_ui::arabic::shape_bidi(&format!("الحفظ في  {path}"))
+                    } else {
+                        format!("Save to  {path}")
+                    };
+                    ui.label(
+                        egui::RichText::new(save_to_msg)
+                            .font(Theme::font(SIZE_LABEL))
+                            .color(theme.text),
+                    );
                 });
                 ui.horizontal(|ui| {
-                    if ui.button("Change folder").clicked() {
+                    if ui.button(nook_ui::i18n::tr("Change folder")).clicked() {
                         self.pick_folder();
                     }
-                    if ui.button("Open folder").clicked() {
+                    if ui.button(nook_ui::i18n::tr("Open folder")).clicked() {
                         let _ = std::fs::create_dir_all(&self.settings.save_dir);
                         if let Err(e) = shell::open(&self.settings.save_dir.to_string_lossy()) {
                             tracing::warn!("phone link: open folder: {e}");
@@ -1653,13 +1740,13 @@ impl PhoneLink {
                     None => {
                         dim(ui, "scrcpy is not installed. It is free and open source, and brings adb along.");
                         ui.horizontal(|ui| {
-                            if ui.button("Install with WinGet").clicked() {
+                            if ui.button(nook_ui::i18n::tr("Install with WinGet")).clicked() {
                                 match mirror::install_with_winget() {
                                     Ok(()) => self.say("Installing… press Check again when it is done"),
                                     Err(e) => self.say(format!("Could not run winget: {e}")),
                                 }
                             }
-                            if ui.button("Check again").clicked() {
+                            if ui.button(nook_ui::i18n::tr("Check again")).clicked() {
                                 self.find_tools();
                             }
                         });
@@ -1684,30 +1771,56 @@ impl PhoneLink {
                 }
                 ui.horizontal(|ui| {
                     ui.add(egui::TextEdit::singleline(&mut self.connect_addr).hint_text("192.168.1.20:5555").desired_width(170.0));
-                    ui.add(egui::TextEdit::singleline(&mut self.pair_code).hint_text("Pairing code").desired_width(100.0));
+                    ui.add(
+                        egui::TextEdit::singleline(&mut self.pair_code)
+                            .hint_text(nook_ui::i18n::tr("Pairing code"))
+                            .desired_width(100.0),
+                    );
                     let addr = self.connect_addr.trim().to_owned();
-                    if ui.add_enabled(!addr.is_empty(), egui::Button::new("Connect")).clicked() {
+                    if ui
+                        .add_enabled(
+                            !addr.is_empty(),
+                            egui::Button::new(nook_ui::i18n::tr("Connect")),
+                        )
+                        .clicked()
+                    {
                         self.adb_send(adb::Cmd::Connect(addr.clone()));
                     }
                     let code = self.pair_code.trim().to_owned();
-                    if ui.add_enabled(!addr.is_empty() && !code.is_empty(), egui::Button::new("Pair")).clicked() {
+                    if ui
+                        .add_enabled(
+                            !addr.is_empty() && !code.is_empty(),
+                            egui::Button::new(nook_ui::i18n::tr("Pair")),
+                        )
+                        .clicked()
+                    {
                         self.adb_send(adb::Cmd::Pair(addr, code));
                     }
                 });
                 dim(ui, "Android 11+: Developer options > Wireless debugging. Pair with the code's address, then connect to the address on the main screen.");
                 let usb = self.device().is_some_and(|d| d.state == DeviceState::Ready && !d.wireless());
                 if ui
-                    .add_enabled(usb, egui::Button::new("Switch the USB phone to Wi-Fi"))
-                    .on_hover_text("Runs adb tcpip 5555 and connects over Wi-Fi; then unplug the cable")
+                    .add_enabled(
+                        usb,
+                        egui::Button::new(nook_ui::i18n::tr("Switch the USB phone to Wi-Fi")),
+                    )
+                    .on_hover_text(nook_ui::i18n::tr(
+                        "Runs adb tcpip 5555 and connects over Wi-Fi; then unplug the cable",
+                    ))
                     .clicked()
                 {
                     self.adb_send(adb::Cmd::GoWireless);
                     self.say("Switching to Wi-Fi…");
                 }
-                if let Some(d) = self.device().filter(|d| d.wireless()).cloned()
-                    && ui.button(format!("Disconnect {}", d.serial)).clicked()
-                {
-                    self.adb_send(adb::Cmd::Disconnect(d.serial));
+                if let Some(d) = self.device().filter(|d| d.wireless()).cloned() {
+                    let disc_lbl = if nook_ui::i18n::is_arabic() {
+                        nook_ui::arabic::shape_bidi(&format!("قطع الاتصال بـ {}", d.serial))
+                    } else {
+                        format!("Disconnect {}", d.serial)
+                    };
+                    if ui.button(disc_lbl).clicked() {
+                        self.adb_send(adb::Cmd::Disconnect(d.serial));
+                    }
                 }
                 if self.devices.len() > 1 {
                     ui.add_space(4.0);
@@ -1749,7 +1862,7 @@ fn setting_row(ui: &mut Ui, label: &str, on: &mut bool, theme: &Theme) -> bool {
     let mut changed = false;
     ui.horizontal(|ui| {
         ui.label(
-            egui::RichText::new(label)
+            egui::RichText::new(nook_ui::i18n::tr(label))
                 .font(Theme::font(SIZE_LABEL + 1.0))
                 .color(theme.text),
         );
@@ -1789,6 +1902,7 @@ fn transfer_row(ui: &mut Ui, card: Rect, t: &Arc<Transfer>, theme: &Theme) -> Op
     );
     let title = match t.files.as_slice() {
         [(name, _)] => name.clone(),
+        list if nook_ui::i18n::is_arabic() => format!("{} ملفات", list.len()),
         list => format!("{} files", list.len()),
     };
     let x = card.min.x + 38.0;
@@ -1801,26 +1915,50 @@ fn transfer_row(ui: &mut Ui, card: Rect, t: &Arc<Transfer>, theme: &Theme) -> Op
         Theme::font_semibold(SIZE_LABEL + 1.0),
         theme.text,
     );
-    let who = if sending {
+    let who = if nook_ui::i18n::is_arabic() {
+        if sending {
+            format!("إلى {}", t.peer)
+        } else {
+            format!("من {}", t.peer)
+        }
+    } else if sending {
         format!("to {}", t.peer)
     } else {
         format!("from {}", t.peer)
     };
     let done = t.done.load(std::sync::atomic::Ordering::Relaxed);
-    let status = match &state {
-        State::Waiting if sending => format!("{who}  ·  waiting for them to accept"),
-        State::Waiting => format!("{who}  ·  waiting for you"),
-        State::NeedPin => format!("{who}  ·  PIN needed"),
-        State::Running => format!(
-            "{who}  ·  {} of {}  ·  {}",
-            human_size(done),
-            human_size(t.total),
-            speed(t.speed())
-        ),
-        State::Done => format!("{who}  ·  {}", human_size(t.total)),
-        State::Declined => format!("{who}  ·  declined"),
-        State::Cancelled => format!("{who}  ·  cancelled"),
-        State::Failed(e) => format!("{who}  ·  {e}"),
+    let status = if nook_ui::i18n::is_arabic() {
+        match &state {
+            State::Waiting if sending => format!("{who}  ·  بانتظار القبول"),
+            State::Waiting => format!("{who}  ·  بانتظارك"),
+            State::NeedPin => format!("{who}  ·  مطلوب رمز PIN"),
+            State::Running => format!(
+                "{who}  ·  {} من {}  ·  {}",
+                human_size(done),
+                human_size(t.total),
+                speed(t.speed())
+            ),
+            State::Done => format!("{who}  ·  {}", human_size(t.total)),
+            State::Declined => format!("{who}  ·  مرفوض"),
+            State::Cancelled => format!("{who}  ·  ملغى"),
+            State::Failed(e) => format!("{who}  ·  {e}"),
+        }
+    } else {
+        match &state {
+            State::Waiting if sending => format!("{who}  ·  waiting for them to accept"),
+            State::Waiting => format!("{who}  ·  waiting for you"),
+            State::NeedPin => format!("{who}  ·  PIN needed"),
+            State::Running => format!(
+                "{who}  ·  {} of {}  ·  {}",
+                human_size(done),
+                human_size(t.total),
+                speed(t.speed())
+            ),
+            State::Done => format!("{who}  ·  {}", human_size(t.total)),
+            State::Declined => format!("{who}  ·  declined"),
+            State::Cancelled => format!("{who}  ·  cancelled"),
+            State::Failed(e) => format!("{who}  ·  {e}"),
+        }
     };
     let meta_x = x + w * 0.62 + 8.0;
     one_line(
@@ -1846,7 +1984,7 @@ fn transfer_row(ui: &mut Ui, card: Rect, t: &Arc<Transfer>, theme: &Theme) -> Op
     let action = pos2(card.max.x - 22.0, card.center().y);
     if !state.finished() {
         if icon_at(ui, action, 26.0, icons::X, false, theme)
-            .on_hover_text("Cancel")
+            .on_hover_text(nook_ui::i18n::tr("Cancel"))
             .clicked()
         {
             t.cancel();
@@ -1855,7 +1993,7 @@ fn transfer_row(ui: &mut Ui, card: Rect, t: &Arc<Transfer>, theme: &Theme) -> Op
         let first = t.saved.lock().ok().and_then(|s| s.first().cloned());
         if let Some(p) = first
             && icon_at(ui, action, 26.0, icons::FOLDER_OPEN, false, theme)
-                .on_hover_text("Show in Explorer")
+                .on_hover_text(nook_ui::i18n::tr("Show in Explorer"))
                 .clicked()
         {
             return Some(p);
@@ -2092,12 +2230,22 @@ impl Module for PhoneLink {
             self.open_page = true;
         }
         let tip = match (self.device(), &self.info) {
-            (Some(d), Some(i)) if d.state == DeviceState::Ready => format!(
-                "{}{}  ·  Click for files, mirroring and notifications",
-                i.name(),
-                i.battery.map(|b| format!(" · {b}%")).unwrap_or_default()
-            ),
-            _ => "Send files, mirror your phone, see its notifications".to_owned(),
+            (Some(d), Some(i)) if d.state == DeviceState::Ready => {
+                if nook_ui::i18n::is_arabic() {
+                    nook_ui::arabic::shape_bidi(&format!(
+                        "{}{}  ·  انقر للملفات وعرض الشاشة والإشعارات",
+                        i.name(),
+                        i.battery.map(|b| format!(" · {b}%")).unwrap_or_default()
+                    ))
+                } else {
+                    format!(
+                        "{}{}  ·  Click for files, mirroring and notifications",
+                        i.name(),
+                        i.battery.map(|b| format!(" · {b}%")).unwrap_or_default()
+                    )
+                }
+            }
+            _ => nook_ui::i18n::tr("Send files, mirror your phone, see its notifications"),
         };
         resp.on_hover_text(tip);
     }
@@ -2108,9 +2256,17 @@ impl Module for PhoneLink {
 
         // Header: tabs (right to left).
         let alerts = if self.unseen > 0 {
-            format!("Alerts ({})", self.unseen)
+            if nook_ui::i18n::is_arabic() {
+                format!("التنبيهات ({})", self.unseen)
+            } else {
+                format!("Alerts ({})", self.unseen)
+            }
         } else if !self.notifs.is_empty() {
-            format!("Alerts · {}", self.notifs.len())
+            if nook_ui::i18n::is_arabic() {
+                format!("التنبيهات · {}", self.notifs.len())
+            } else {
+                format!("Alerts · {}", self.notifs.len())
+            }
         } else {
             "Alerts".to_owned()
         };

@@ -287,16 +287,29 @@ impl SystemMonitor {
             )
         };
 
+        let up_dur = perf::uptime();
+        let cpu_sub = if nook_ui::i18n::is_arabic() {
+            let secs = up_dur.as_secs();
+            let d = secs / 86_400;
+            let h = (secs % 86_400) / 3600;
+            let m = (secs % 3600) / 60;
+            let up_ar = if d > 0 {
+                format!("{d}ي {h}س")
+            } else if h > 0 {
+                format!("{h}س {m}د")
+            } else {
+                format!("{}د", m.max(1))
+            };
+            format!("{} مسار  \u{00B7}  التشغيل {up_ar}", self.cpus)
+        } else {
+            format!("{} threads  \u{00B7}  up {}", self.cpus, uptime_label(up_dur))
+        };
         let chart = Self::stat_card(
             ui,
             cell(0, 0),
             "CPU",
             &format!("{:.0}%", self.cpu_now() * 100.0),
-            &format!(
-                "{} threads  \u{00B7}  up {}",
-                self.cpus,
-                uptime_label(perf::uptime())
-            ),
+            &cpu_sub,
             theme,
         );
         let v: Vec<f32> = self.cpu.iter().copied().collect();
@@ -304,12 +317,17 @@ impl SystemMonitor {
         kit::sparkline(ui.painter(), chart, &v, 1.0, theme.accent);
 
         let m = self.memory;
+        let mem_sub = if nook_ui::i18n::is_arabic() {
+            format!("{} من {} قيد الاستخدام", human_size(m.used), human_size(m.total))
+        } else {
+            format!("{} of {} in use", human_size(m.used), human_size(m.total))
+        };
         let chart = Self::stat_card(
             ui,
             cell(1, 0),
             "MEMORY",
             &format!("{:.0}%", self.mem_now() * 100.0),
-            &format!("{} of {} in use", human_size(m.used), human_size(m.total)),
+            &mem_sub,
             theme,
         );
         let v: Vec<f32> = self.mem.iter().copied().collect();
@@ -318,12 +336,17 @@ impl SystemMonitor {
 
         let down = self.down.back().copied().unwrap_or(0.0);
         let up = self.up.back().copied().unwrap_or(0.0);
+        let net_sub = if nook_ui::i18n::is_arabic() {
+            format!("\u{2191} {} رفع", rate(up))
+        } else {
+            format!("\u{2191} {} upload", rate(up))
+        };
         let chart = Self::stat_card(
             ui,
             cell(0, 1),
             "NETWORK",
             &format!("\u{2193} {}", rate(down)),
-            &format!("\u{2191} {} upload", rate(up)),
+            &net_sub,
             theme,
         );
         let d: Vec<f32> = self.down.iter().copied().collect();
@@ -366,14 +389,23 @@ impl SystemMonitor {
                     theme.text
                 },
             );
-            ui.painter().text(
-                pos2(row.max.x, row.min.y + 6.0),
-                Align2::RIGHT_CENTER,
+            let disk_info = if nook_ui::i18n::is_arabic() {
+                nook_ui::arabic::shape_bidi(&format!(
+                    "{} متاح من {}",
+                    human_size(disk.free),
+                    human_size(disk.total)
+                ))
+            } else {
                 format!(
                     "{} free of {}",
                     human_size(disk.free),
                     human_size(disk.total)
-                ),
+                )
+            };
+            ui.painter().text(
+                pos2(row.max.x, row.min.y + 6.0),
+                Align2::RIGHT_CENTER,
+                disk_info,
                 Theme::font(SIZE_LABEL - 1.0),
                 theme.text_dim,
             );
@@ -670,13 +702,23 @@ impl Module for SystemMonitor {
                 },
             );
         }
-        let tip = format!(
-            "CPU {:.0}%  \u{00B7}  Memory {:.0}% ({} of {})",
-            cpu * 100.0,
-            mem * 100.0,
-            human_size(self.memory.used),
-            human_size(self.memory.total)
-        );
+        let tip = if nook_ui::i18n::is_arabic() {
+            nook_ui::arabic::shape_bidi(&format!(
+                "المعالج {:.0}%  \u{00B7}  الذاكرة {:.0}% ({} من {})",
+                cpu * 100.0,
+                mem * 100.0,
+                human_size(self.memory.used),
+                human_size(self.memory.total)
+            ))
+        } else {
+            format!(
+                "CPU {:.0}%  \u{00B7}  Memory {:.0}% ({} of {})",
+                cpu * 100.0,
+                mem * 100.0,
+                human_size(self.memory.used),
+                human_size(self.memory.total)
+            )
+        };
         if resp.on_hover_text(tip).clicked() {
             self.open_page = true;
         }
@@ -693,7 +735,10 @@ impl Module for SystemMonitor {
             .on_hover_text(nook_ui::i18n::tr("Open Task Manager"))
             .clicked()
         {
+            #[cfg(windows)]
             let _ = shell::open("taskmgr.exe");
+            #[cfg(target_os = "linux")]
+            let _ = shell::open("gnome-system-monitor");
         }
         let left = Rect::from_min_size(body.min, vec2(450.0, body.height()));
         self.cards(ui, left, theme);

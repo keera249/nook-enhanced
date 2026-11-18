@@ -361,7 +361,7 @@ impl Renderer<'_> {
                     ui.painter().text(
                         rect.center(),
                         Align2::CENTER_CENTER,
-                        label,
+                        nook_ui::i18n::tr(label),
                         Theme::font_semibold((s * 0.26).clamp(9.0, 22.0)),
                         theme.text,
                     );
@@ -853,7 +853,7 @@ impl Renderer<'_> {
                     0.0
                 } else {
                     let g = ui.painter().layout_no_wrap(
-                        item.trailing.clone(),
+                        nook_ui::i18n::tr(&item.trailing),
                         Theme::font(SIZE_LABEL),
                         theme.text_dim,
                     );
@@ -1030,7 +1030,7 @@ impl Renderer<'_> {
                     painter.text(
                         at(*x, *y),
                         align,
-                        text,
+                        nook_ui::i18n::tr(text),
                         font,
                         color(c.as_deref(), theme.text, theme),
                     );

@@ -26,6 +26,8 @@ pub struct SystemState {
     pub animations: bool,
     pub transparency: bool,
     pub battery: Option<system::Battery>,
+    pub lock_keys: (bool, bool, bool),
+    pub privacy: (bool, bool),
     /// Hash of the wallpaper's path; changes when the wallpaper does.
     pub wallpaper: u64,
 }
@@ -59,6 +61,8 @@ pub fn sample(own: Hwnd, mode_cursor: bool) -> SystemState {
         animations: system::animations_enabled(),
         transparency: system::transparency_enabled(),
         battery: system::battery(),
+        lock_keys: system::lock_keys(),
+        privacy: system::privacy_in_use(),
         wallpaper: {
             use std::hash::{Hash, Hasher};
             let mut h = std::collections::hash_map::DefaultHasher::new();

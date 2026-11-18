@@ -379,11 +379,12 @@ pub fn card(painter: &egui::Painter, rect: egui::Rect, theme: &Theme) {
     let s = Squircle::new(rect, crate::theme::TILE_RADIUS);
     let outline = s.outline();
     paint::fill_gradient(painter, &outline, theme.tile_top, theme.tile_bottom);
-    painter.add(egui::epaint::PathShape::closed_line(
-        outline,
-        egui::epaint::PathStroke::new(1.0, theme.tile_rim),
-    ));
     if theme.liquid_glass {
-        paint::tile_liquid_sheen(painter, rect, theme, 0.0);
+        paint::tile_liquid_sheen(painter, rect, theme, false, 0.0);
+    } else {
+        painter.add(egui::epaint::PathShape::closed_line(
+            outline,
+            egui::epaint::PathStroke::new(1.0, theme.tile_rim),
+        ));
     }
 }

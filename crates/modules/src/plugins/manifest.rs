@@ -101,8 +101,8 @@ impl Manifest {
 /// (separated by `;`).
 pub fn search_dirs() -> Vec<PathBuf> {
     let mut dirs = Vec::new();
-    if let Some(a) = std::env::var_os("APPDATA") {
-        dirs.push(PathBuf::from(a).join("Nook").join("plugins"));
+    if let Some(cfg) = nook_platform::files::config_dir() {
+        dirs.push(cfg.join("plugins"));
     }
     if let Some(exe_dir) = std::env::current_exe()
         .ok()

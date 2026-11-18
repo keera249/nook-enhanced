@@ -2,7 +2,7 @@
 //! watcher, and keeps the OS window (position, region, material) in sync
 //! with what the shell draws.
 
-use crate::config::{AccentSource, Config, Material, MonitorMode, NotchShape};
+use crate::config::{AccentSource, Config, IdlePillMode, Material, MonitorMode, NotchShape};
 use crate::settings::{self, SETTINGS_ID, SettingsTile};
 use crate::stats::{self, Stats};
 use crate::tray::{Tray, TrayCommand};
@@ -30,7 +30,15 @@ use nook_ui::theme::{self, FALLBACK_ACCENT, SIZE_BODY, SIZE_LABEL, Theme, ThemeM
 use raw_window_handle::{HasWindowHandle, RawWindowHandle};
 use std::str::FromStr;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
+
+#[derive(Clone, Debug)]
+struct HudBanner {
+    icon: &'static str,
+    text: String,
+    color: Color32,
+    until: Instant,
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 enum Page {
@@ -122,6 +130,8 @@ pub struct NookApp {
     updater: Updater,
     /// The anonymous daily usage ping.
     stats: Stats,
+    hud_banner: Option<HudBanner>,
+    cpu_ram_cache: (u8, u8, Instant, nook_platform::perf::CpuTimes),
     _instance: InstanceGuard,
     #[cfg(feature = "debug-overlay")]
     overlay: crate::overlay::DebugOverlay,
@@ -284,6 +294,13 @@ impl NookApp {
             activatable: false,
             updater,
             stats,
+            hud_banner: None,
+            cpu_ram_cache: (
+                0,
+                0,
+                Instant::now() - Duration::from_secs(5),
+                nook_platform::perf::cpu_times().unwrap_or_default(),
+            ),
             _instance: instance,
             #[cfg(feature = "debug-overlay")]
             overlay: Default::default(),
@@ -525,23 +542,39 @@ impl NookApp {
             return;
         };
         let ppp = ctx.pixels_per_point();
-        let (top, bottom) = theme.glass_at(out.progress);
+        let flat_top = out.shape.flat_top;
+        let [top, upper_mid, lower_mid, bottom] = theme.glass_stops_at(out.progress, flat_top);
+        let [rim_top, rim_mid, rim_bottom] = theme.rim_stops_at(out.progress, flat_top);
         let unmult = |c: Color32| theme::with_alpha(c, out.opacity).to_srgba_unmultiplied();
         let rect = out.shape.rect;
         let r = out.shape.radius;
         let is_liquid = self.material.is_liquid();
+        let highlight_y = if flat_top {
+            (rect.max.y - 1.1) * ppp
+        } else {
+            (rect.min.y + 1.0) * ppp
+        };
+        let hl_color = if flat_top {
+            theme::with_alpha(theme.highlight_at(out.progress), 0.72)
+        } else {
+            theme.highlight_at(out.progress)
+        };
         let tint = Tint {
             top: unmult(top),
+            upper_mid: unmult(upper_mid),
+            lower_mid: unmult(lower_mid),
             bottom: unmult(bottom),
             y0: rect.min.y * ppp,
             y1: rect.max.y * ppp,
             blur: self.material.translucent(),
-            rim: unmult(theme.rim_at(out.progress)),
-            rim_width: if is_liquid { 2.5 * ppp } else { 2.0 * ppp },
-            highlight: unmult(theme.highlight_at(out.progress)),
+            rim_top: unmult(rim_top),
+            rim_mid: unmult(rim_mid),
+            rim_bottom: unmult(rim_bottom),
+            rim_width: if is_liquid { 2.4 * ppp } else { 2.0 * ppp },
+            highlight: unmult(hl_color),
             highlight_x0: (rect.min.x + r) * ppp,
             highlight_x1: (rect.max.x - r) * ppp,
-            highlight_y: (rect.min.y + 1.0) * ppp,
+            highlight_y,
         };
         if let Err(e) = b.set_tint(tint) {
             tracing::warn!("backdrop tint: {e}");
@@ -765,7 +798,7 @@ fn ink_text(
     cy: f32,
     from_right: bool,
 ) -> Rect {
-    let shaped = nook_ui::arabic::shape_bidi(text);
+    let shaped = nook_ui::i18n::tr(text);
     let galley = painter.layout_no_wrap(shaped, font, color);
     let ink = galley.mesh_bounds;
     let dx = if from_right {
@@ -787,13 +820,129 @@ fn icon_font(size: f32, fill: bool) -> FontId {
     FontId::new(size, FontFamily::Name(family.into()))
 }
 
+/// Draws the animated Notch Pet (Cat / Dog / Bunny) inspired by NotchPixel's IdleFace/PetLife.
+fn draw_notch_pet(
+    painter: &egui::Painter,
+    origin: egui::Pos2,
+    now: f64,
+    mode: IdlePillMode,
+    theme: &Theme,
+) -> f32 {
+    let bob = ((now * 3.8).sin() * 1.1) as f32;
+    let walk = ((now * 1.1).sin() * 3.5) as f32;
+    let c = pos2(origin.x + 10.0 + walk, origin.y + bob);
+    let body_col = theme.accent_fg();
+    let ear_col = theme::mix(body_col, theme.pill_text, 0.35);
+
+    // Head
+    painter.circle_filled(c, 6.2, body_col);
+
+    // Ears by pet species
+    match mode {
+        IdlePillMode::Cat => {
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(c.x - 5.5, c.y - 3.0),
+                    pos2(c.x - 2.2, c.y - 8.2),
+                    pos2(c.x - 1.0, c.y - 4.5),
+                ],
+                ear_col,
+                egui::Stroke::NONE,
+            ));
+            painter.add(egui::Shape::convex_polygon(
+                vec![
+                    pos2(c.x + 1.0, c.y - 4.5),
+                    pos2(c.x + 2.2, c.y - 8.2),
+                    pos2(c.x + 5.5, c.y - 3.0),
+                ],
+                ear_col,
+                egui::Stroke::NONE,
+            ));
+        }
+        IdlePillMode::Dog => {
+            let flap = ((now * 5.0).sin() * 0.8) as f32;
+            painter.rect_filled(
+                Rect::from_center_size(pos2(c.x - 6.0, c.y - 1.0 + flap), vec2(3.2, 6.8)),
+                1.6,
+                ear_col,
+            );
+            painter.rect_filled(
+                Rect::from_center_size(pos2(c.x + 6.0, c.y - 1.0 - flap), vec2(3.2, 6.8)),
+                1.6,
+                ear_col,
+            );
+        }
+        IdlePillMode::Bunny => {
+            let twitch = ((now * 4.2).sin() * 0.7) as f32;
+            painter.rect_filled(
+                Rect::from_center_size(pos2(c.x - 2.6, c.y - 7.5 + twitch), vec2(2.6, 7.2)),
+                1.3,
+                ear_col,
+            );
+            painter.rect_filled(
+                Rect::from_center_size(pos2(c.x + 2.6, c.y - 7.5 - twitch), vec2(2.6, 7.2)),
+                1.3,
+                ear_col,
+            );
+        }
+        _ => {}
+    }
+
+    // Blinking eyes
+    let blinking = (now % 3.6) < 0.16;
+    let eye_col = Color32::from_rgb(20, 22, 28);
+    if blinking {
+        painter.hline((c.x - 3.5)..=(c.x - 1.3), c.y - 0.5, egui::Stroke::new(1.2, eye_col));
+        painter.hline((c.x + 1.3)..=(c.x + 3.5), c.y - 0.5, egui::Stroke::new(1.2, eye_col));
+    } else {
+        painter.circle_filled(pos2(c.x - 2.3, c.y - 0.6), 1.15, eye_col);
+        painter.circle_filled(pos2(c.x + 2.3, c.y - 0.6), 1.15, eye_col);
+    }
+    // Tiny nose
+    painter.circle_filled(pos2(c.x, c.y + 1.5), 0.9, Color32::from_rgb(244, 114, 182));
+
+    origin.x + 24.0
+}
+
 /// Collapsed pill: live badges from modules (Dynamic Island media, ring +
 /// label on the left, glyphs and pulse dots on the right), or a sleek mini
 /// indicator when shrunk in full-window mode.
-fn draw_pill(badges: Vec<Badge>, battery: Option<Battery>, ui: &mut Ui, rect: Rect, theme: &Theme) {
+fn draw_pill(
+    badges: Vec<Badge>,
+    battery: Option<Battery>,
+    hud: Option<HudBanner>,
+    privacy: (bool, bool),
+    idle_mode: IdlePillMode,
+    cpu_ram: (u8, u8),
+    ui: &mut Ui,
+    rect: Rect,
+    theme: &Theme,
+) {
     let painter = ui.painter();
     let cy = rect.center().y;
     let now = ui.input(|i| i.time);
+
+    // 0. System HUD Banner (Caps/Num/Scroll Lock, Charging state, Mic/Camera privacy alert).
+    if let Some(h) = hud
+        && rect.height() >= 22.0
+    {
+        let badge_r = Rect::from_center_size(pos2(rect.min.x + 18.0, cy), vec2(22.0, 22.0));
+        painter.rect_filled(badge_r, 11.0, theme::with_alpha(h.color, 0.22));
+        paint::icon(painter, badge_r.center(), h.icon, 13.0, h.color, true);
+        ink_text(
+            painter,
+            &h.text,
+            Theme::font_semibold(SIZE_BODY),
+            theme.pill_text,
+            badge_r.max.x + 8.0,
+            cy,
+            false,
+        );
+        let remain = h.until.saturating_duration_since(Instant::now());
+        ui.ctx()
+            .request_repaint_after(remain.min(Duration::from_millis(50)));
+        return;
+    }
 
     // 1. iPhone Dynamic Island Now-Playing Media mode.
     if let Some((title, _artist, playing, art)) = badges.iter().find_map(|b| match b {
@@ -944,17 +1093,64 @@ fn draw_pill(badges: Vec<Badge>, battery: Option<Battery>, ui: &mut Ui, rect: Re
                 false,
             );
         }
-        None => {
-            ink_text(
-                painter,
-                &clock.time,
-                Theme::font_semibold(SIZE_BODY),
-                theme.pill_text,
-                left,
-                cy,
-                false,
-            );
-        }
+        None => match idle_mode {
+            IdlePillMode::Clock => {
+                ink_text(
+                    painter,
+                    &clock.time,
+                    Theme::font_semibold(SIZE_BODY),
+                    theme.pill_text,
+                    left,
+                    cy,
+                    false,
+                );
+            }
+            IdlePillMode::Stats => {
+                let stats_txt = format!("{}% · {}%", cpu_ram.0, cpu_ram.1);
+                let icon_ink = ink_text(
+                    painter,
+                    nook_ui::icons::CPU,
+                    icon_font(13.0, true),
+                    theme.accent_fg(),
+                    left,
+                    cy,
+                    false,
+                );
+                ink_text(
+                    painter,
+                    &stats_txt,
+                    Theme::font_semibold(SIZE_LABEL + 0.5),
+                    theme.pill_text,
+                    icon_ink.max.x + 5.0,
+                    cy,
+                    false,
+                );
+                ui.ctx().request_repaint_after(Duration::from_millis(1500));
+            }
+            IdlePillMode::Cat | IdlePillMode::Dog | IdlePillMode::Bunny => {
+                let next_x = draw_notch_pet(painter, pos2(left, cy), now, idle_mode, theme);
+                ink_text(
+                    painter,
+                    &clock.time,
+                    Theme::font_semibold(SIZE_LABEL + 1.0),
+                    theme.pill_text,
+                    next_x,
+                    cy,
+                    false,
+                );
+                ui.ctx().request_repaint_after(Duration::from_millis(75));
+            }
+        },
+    }
+
+    // Privacy indicator dots (Green = Camera active, Orange = Microphone active).
+    if privacy.1 {
+        painter.circle_filled(pos2(right - 3.0, cy), 3.4, Color32::from_rgb(52, 211, 153));
+        right -= 10.0;
+    }
+    if privacy.0 {
+        painter.circle_filled(pos2(right - 3.0, cy), 3.4, Color32::from_rgb(251, 146, 60));
+        right -= 10.0;
     }
 
     // Right: live glyphs (coffee, phone pulse...), otherwise battery or date.
@@ -1198,6 +1394,84 @@ impl eframe::App for NookApp {
                 // New wallpaper (from the wallpaper page or elsewhere): new accent.
                 spawn_wallpaper_accent(self.accent_tx.clone(), ctx.clone());
             }
+            if self.cfg.show_system_hud && self.frames > 3 {
+                if s.lock_keys.0 != self.sys.lock_keys.0 {
+                    let key = if s.lock_keys.0 { "Caps Lock ON" } else { "Caps Lock OFF" };
+                    let color = if s.lock_keys.0 {
+                        Color32::from_rgb(56, 189, 248)
+                    } else {
+                        Color32::from_rgb(148, 163, 184)
+                    };
+                    self.hud_banner = Some(HudBanner {
+                        icon: nook_ui::icons::KEYBOARD,
+                        text: nook_ui::i18n::tr(key),
+                        color,
+                        until: Instant::now() + Duration::from_millis(2100),
+                    });
+                } else if s.lock_keys.1 != self.sys.lock_keys.1 {
+                    let key = if s.lock_keys.1 { "Num Lock ON" } else { "Num Lock OFF" };
+                    let color = if s.lock_keys.1 {
+                        Color32::from_rgb(52, 211, 153)
+                    } else {
+                        Color32::from_rgb(148, 163, 184)
+                    };
+                    self.hud_banner = Some(HudBanner {
+                        icon: nook_ui::icons::HASH,
+                        text: nook_ui::i18n::tr(key),
+                        color,
+                        until: Instant::now() + Duration::from_millis(2100),
+                    });
+                } else if s.lock_keys.2 != self.sys.lock_keys.2 {
+                    let key = if s.lock_keys.2 { "Scroll Lock ON" } else { "Scroll Lock OFF" };
+                    let color = if s.lock_keys.2 {
+                        Color32::from_rgb(251, 191, 36)
+                    } else {
+                        Color32::from_rgb(148, 163, 184)
+                    };
+                    self.hud_banner = Some(HudBanner {
+                        icon: nook_ui::icons::ARROWS_OUT_LINE_VERTICAL,
+                        text: nook_ui::i18n::tr(key),
+                        color,
+                        until: Instant::now() + Duration::from_millis(2100),
+                    });
+                } else if let (Some(now_b), Some(prev_b)) = (s.battery, self.sys.battery)
+                    && now_b.charging != prev_b.charging
+                {
+                    let (icon, label, color) = if now_b.charging {
+                        (
+                            nook_ui::icons::LIGHTNING,
+                            format!("{} · {}%", nook_ui::i18n::tr("Charging"), now_b.percent),
+                            Color32::from_rgb(52, 211, 153),
+                        )
+                    } else {
+                        (
+                            nook_ui::icons::BATTERY_MEDIUM,
+                            format!("{} · {}%", nook_ui::i18n::tr("On Battery"), now_b.percent),
+                            Color32::from_rgb(251, 191, 36),
+                        )
+                    };
+                    self.hud_banner = Some(HudBanner {
+                        icon,
+                        text: label,
+                        color,
+                        until: Instant::now() + Duration::from_millis(2500),
+                    });
+                } else if s.privacy.1 && !self.sys.privacy.1 {
+                    self.hud_banner = Some(HudBanner {
+                        icon: nook_ui::icons::VIDEO_CAMERA,
+                        text: nook_ui::i18n::tr("Camera Active"),
+                        color: Color32::from_rgb(52, 211, 153),
+                        until: Instant::now() + Duration::from_millis(2400),
+                    });
+                } else if s.privacy.0 && !self.sys.privacy.0 {
+                    self.hud_banner = Some(HudBanner {
+                        icon: nook_ui::icons::MICROPHONE,
+                        text: nook_ui::i18n::tr("Microphone Active"),
+                        color: Color32::from_rgb(251, 146, 60),
+                        until: Instant::now() + Duration::from_millis(2400),
+                    });
+                }
+            }
             self.sys = s;
         }
         while let Ok(a) = self.accent_rx.try_recv() {
@@ -1270,6 +1544,50 @@ impl eframe::App for NookApp {
             }
         });
         let is_hovered = hit_inside || hovered_notch;
+        if is_hovered && !self.shell.state.is_open() {
+            let (scroll_y, alt_held, mid_clicked) = ctx.input(|i| {
+                let sy: f32 = i
+                    .events
+                    .iter()
+                    .map(|e| match e {
+                        egui::Event::MouseWheel { unit, delta, .. } => match unit {
+                            egui::MouseWheelUnit::Line => delta.y,
+                            egui::MouseWheelUnit::Point => delta.y / 30.0,
+                            egui::MouseWheelUnit::Page => delta.y * 3.0,
+                        },
+                        _ => 0.0,
+                    })
+                    .sum();
+                (
+                    sy,
+                    i.modifiers.alt,
+                    i.pointer.button_clicked(egui::PointerButton::Middle),
+                )
+            });
+            if scroll_y.abs() >= 0.25 && !alt_held {
+                let steps = if scroll_y > 0.0 { 1 } else { -1 };
+                system::volume_step(steps);
+                self.hud_banner = Some(HudBanner {
+                    icon: if steps > 0 {
+                        nook_ui::icons::SPEAKER_HIGH
+                    } else {
+                        nook_ui::icons::SPEAKER_LOW
+                    },
+                    text: nook_ui::i18n::tr(if steps > 0 { "Volume Up" } else { "Volume Down" }),
+                    color: Color32::from_rgb(56, 189, 248),
+                    until: Instant::now() + Duration::from_millis(1600),
+                });
+            }
+            if mid_clicked {
+                system::media_play_pause_key();
+                self.hud_banner = Some(HudBanner {
+                    icon: nook_ui::icons::PLAY_PAUSE,
+                    text: nook_ui::i18n::tr("Play / Pause"),
+                    color: Color32::from_rgb(168, 85, 247),
+                    until: Instant::now() + Duration::from_millis(1600),
+                });
+            }
+        }
         let badges: Vec<Badge> = self
             .registry
             .visible()
@@ -1291,9 +1609,36 @@ impl eframe::App for NookApp {
                 Badge::Media { .. } => false,
             }
         };
-        let has_notification = badges.iter().any(is_notification);
+        let active_hud = self
+            .hud_banner
+            .as_ref()
+            .filter(|b| Instant::now() < b.until)
+            .cloned();
+        if self.cfg.idle_pill_mode == IdlePillMode::Stats
+            && self.cpu_ram_cache.2.elapsed() >= Duration::from_millis(1400)
+            && let Ok(ct) = nook_platform::perf::cpu_times()
+        {
+            let cpu = (ct.usage_since(&self.cpu_ram_cache.3) * 100.0).round() as u8;
+            let ram = nook_platform::perf::memory()
+                .map(|m| {
+                    if m.total > 0 {
+                        ((m.used as f64 / m.total as f64) * 100.0).round() as u8
+                    } else {
+                        0
+                    }
+                })
+                .unwrap_or(0);
+            self.cpu_ram_cache = (cpu, ram, Instant::now(), ct);
+        }
+        let has_notification = badges.iter().any(is_notification) || active_hud.is_some();
         let base_w = (if self.cfg.notch_width == 0 { 180 } else { self.cfg.notch_width }).clamp(130, 320) as f32;
-        let mut notif_extra_w = 0.0f32;
+        let mut notif_extra_w: f32 = if active_hud.is_some() { 42.0 } else { 0.0 };
+        if matches!(
+            self.cfg.idle_pill_mode,
+            IdlePillMode::Cat | IdlePillMode::Dog | IdlePillMode::Bunny | IdlePillMode::Stats
+        ) {
+            notif_extra_w = notif_extra_w.max(22.0);
+        }
         for b in &badges {
             match b {
                 Badge::Ring { label, .. } if is_notification(b) => {
@@ -1362,6 +1707,9 @@ impl eframe::App for NookApp {
             self.shell.metrics.top_margin = if is_notch_shape { 0.0 } else { 6.0 };
         }
         let battery = self.sys.battery;
+        let privacy = self.sys.privacy;
+        let idle_mode = self.cfg.idle_pill_mode;
+        let cpu_ram = (self.cpu_ram_cache.0, self.cpu_ram_cache.1);
         let composited = self.backdrop.is_some();
         // Stay open while typing in the panel or playing a plugin game (and
         // the window has focus) or while files are dragged over it.
@@ -1377,7 +1725,19 @@ impl eframe::App for NookApp {
             &theme,
             hidden,
             composited,
-            |ui, rect, _alpha| draw_pill(badges, battery, ui, rect, &theme),
+            |ui, rect, _alpha| {
+                draw_pill(
+                    badges,
+                    battery,
+                    active_hud,
+                    privacy,
+                    idle_mode,
+                    cpu_ram,
+                    ui,
+                    rect,
+                    &theme,
+                )
+            },
             |ui, cctx| match page {
                 Page::Bento => {
                     let mut tiles = registry.grid_mut(editing);
@@ -1455,6 +1815,24 @@ impl eframe::App for NookApp {
         }
         if let Some(id) = page_request {
             self.page = Page::Module(id);
+        } else if let Some(id) = clicked
+            && matches!(
+                id,
+                "control_center"
+                    | "weather"
+                    | "todo_focus"
+                    | "net_ping"
+                    | "world_clock"
+                    | "market_watch"
+                    | "screen_time"
+                    | "reminders"
+                    | "unit_converter"
+                    | "translator"
+                    | "habit_water"
+                    | "ambient_sound"
+            )
+        {
+            self.page = Page::Module(id);
         }
         for m in self.registry.all_mut() {
             m.ui_overlay(&ctx, &theme);
@@ -1476,6 +1854,9 @@ impl eframe::App for NookApp {
             ctx.send_viewport_cmd(egui::ViewportCommand::Close);
         }
         if settings_out.changed {
+            if let Some(t) = &self.tray {
+                t.sync_language();
+            }
             self.shell.timings = timings(&self.cfg);
             self.shell.placement = self.cfg.placement;
             self.watcher.set_monitor_mode(self.cfg.monitor);

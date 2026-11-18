@@ -358,17 +358,18 @@ impl Calendar {
 
         // Title and navigation.
         let title_y = inner.min.y + 12.0;
+        let month_title = nook_ui::i18n::tr(MONTHS[m as usize - 1]);
         ui.painter().text(
             pos2(inner.min.x + 2.0, title_y),
             Align2::LEFT_CENTER,
-            MONTHS[m as usize - 1],
+            &month_title,
             Theme::font_semibold(SIZE_BODY + 5.0),
             theme.text,
         );
         let month_w = ui
             .painter()
             .layout_no_wrap(
-                MONTHS[m as usize - 1].to_owned(),
+                month_title,
                 Theme::font_semibold(SIZE_BODY + 5.0),
                 theme.text,
             )
@@ -565,7 +566,7 @@ impl Calendar {
             kit::one_line(
                 ui,
                 pos2(banner.min.x + 32.0, banner.center().y - 8.0),
-                &format!("Now: {alert}"),
+                &format!("{}{alert}", nook_ui::i18n::tr("Now: ")),
                 banner.width() - 64.0,
                 Theme::font_semibold(SIZE_LABEL + 1.0),
                 theme.text,
@@ -585,17 +586,23 @@ impl Calendar {
             cursor = banner.max.y + 10.0;
         }
 
+        let wd_name = WEEKDAYS[weekday(day) as usize];
+        let wd_header = if nook_ui::i18n::is_arabic() {
+            nook_ui::i18n::tr(wd_name)
+        } else {
+            wd_name.to_uppercase()
+        };
         ui.painter().text(
             pos2(col.min.x + 2.0, cursor),
             Align2::LEFT_TOP,
-            WEEKDAYS[weekday(day) as usize].to_uppercase(),
+            wd_header,
             Theme::font_semibold(SIZE_LABEL - 1.0),
             theme.accent_fg(),
         );
         ui.painter().text(
             pos2(col.min.x + 1.0, cursor + 14.0),
             Align2::LEFT_TOP,
-            format!("{d} {}", MONTHS[m as usize - 1]),
+            format!("{d} {}", nook_ui::i18n::tr(MONTHS[m as usize - 1])),
             Theme::font_semibold(26.0),
             theme.text,
         );
@@ -608,8 +615,9 @@ impl Calendar {
             pos2(col.min.x + 2.0, cursor + 50.0),
             Align2::LEFT_TOP,
             format!(
-                "{}  \u{00B7}  Week {}{year}",
+                "{}  \u{00B7}  {} {}{year}",
                 relative(day, today),
+                nook_ui::i18n::tr("Week"),
                 iso_week(day)
             ),
             Theme::font(SIZE_LABEL),
@@ -652,11 +660,19 @@ impl Calendar {
                 for (k, e) in upcoming.iter().enumerate() {
                     let (_, em, ed) = civil_from_days(e.day);
                     let yy = list.min.y + 54.0 + k as f32 * 22.0;
-                    let when = format!(
-                        "{} {ed} {}",
-                        &WEEKDAYS[weekday(e.day) as usize][..3],
-                        &MONTHS[em as usize - 1][..3]
-                    );
+                    let when = if nook_ui::i18n::is_arabic() {
+                        format!(
+                            "{} {ed} {}",
+                            nook_ui::i18n::tr(&WEEKDAYS[weekday(e.day) as usize][..3]),
+                            nook_ui::i18n::tr(&MONTHS[em as usize - 1][..3])
+                        )
+                    } else {
+                        format!(
+                            "{} {ed} {}",
+                            &WEEKDAYS[weekday(e.day) as usize][..3],
+                            &MONTHS[em as usize - 1][..3]
+                        )
+                    };
                     ui.painter().text(
                         pos2(list.min.x + 2.0, yy),
                         Align2::LEFT_TOP,
@@ -984,6 +1000,7 @@ mod tests {
 
     #[test]
     fn times_and_events() {
+        nook_ui::i18n::set_language(nook_ui::i18n::Language::English);
         assert_eq!(parse_time("14:30"), Some(14 * 60 + 30));
         assert_eq!(parse_time("9.05"), Some(9 * 60 + 5));
         assert_eq!(parse_time("2pm"), Some(14 * 60));

@@ -393,8 +393,8 @@ impl Module for Timer {
                 theme,
             )
             .on_hover_text(match other.1 {
-                Mode::Countdown => "Countdown",
-                Mode::Stopwatch => "Stopwatch",
+                Mode::Countdown => nook_ui::i18n::tr("Countdown"),
+                Mode::Stopwatch => nook_ui::i18n::tr("Stopwatch"),
             })
             .clicked()
         {
@@ -445,7 +445,9 @@ impl Module for Timer {
             let time_rect = Rect::from_center_size(center, vec2(radius * 2.0, radius * 2.0));
             if ui
                 .interact(time_rect, Id::new("nook-timer-time"), Sense::click())
-                .on_hover_text("Double-click to type a time: 5, 5:30, 90s or 1h30m")
+                .on_hover_text(nook_ui::i18n::tr(
+                    "Double-click to type a time: 5, 5:30, 90s or 1h30m",
+                ))
                 .double_clicked()
             {
                 self.editing = Some(format_secs(self.clock.duration(), true));

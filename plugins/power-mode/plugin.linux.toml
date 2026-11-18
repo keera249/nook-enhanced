@@ -1,0 +1,9 @@
+id          = "power-mode"
+name        = "Power & Performance"
+icon        = "lightning"
+size        = "small"
+run         = ["python3", "power_linux.py"]
+page_size   = [540, 310]
+description = "Switch between Performance, Balanced, and Power Saver modes in one click (powerprofilesctl / ACPI)."
+author      = "you"
+version     = "1.0.0"

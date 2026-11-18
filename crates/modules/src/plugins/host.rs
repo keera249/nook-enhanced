@@ -10,6 +10,7 @@ use super::manifest::{Found, Mode};
 use super::protocol::{self, Out};
 use serde_json::Value;
 use std::io::{BufRead, BufReader, Read, Write};
+#[cfg(windows)]
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
 use std::process::{Child, Command, Stdio};
@@ -19,6 +20,7 @@ use std::sync::mpsc::{self, Receiver, RecvTimeoutError, Sender};
 use std::time::{Duration, Instant};
 
 /// No console window flashing up for console programs (python, node, ...).
+#[cfg(windows)]
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 /// A poll run that takes longer is killed.
 const POLL_TIMEOUT: Duration = Duration::from_secs(30);
@@ -71,8 +73,9 @@ fn command(found: &Found, data_dir: &Path, dark: bool, accent: &str) -> Command 
         .env("PYTHONIOENCODING", "utf-8")
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .creation_flags(CREATE_NO_WINDOW);
+        .stderr(Stdio::piped());
+    #[cfg(windows)]
+    cmd.creation_flags(CREATE_NO_WINDOW);
     if let Some(exe_dir) = std::env::current_exe()
         .ok()
         .and_then(|p| p.parent().map(Path::to_path_buf))
@@ -84,10 +87,8 @@ fn command(found: &Found, data_dir: &Path, dark: bool, accent: &str) -> Command 
 
 /// `%APPDATA%\Nook\plugin-data\<id>`, created on first use.
 pub fn data_dir(id: &str) -> PathBuf {
-    let base = std::env::var_os("APPDATA")
-        .map(PathBuf::from)
-        .unwrap_or_else(std::env::temp_dir);
-    let dir = base.join("Nook").join("plugin-data").join(id);
+    let base = nook_platform::files::config_dir().unwrap_or_else(std::env::temp_dir);
+    let dir = base.join("plugin-data").join(id);
     if let Err(e) = std::fs::create_dir_all(&dir) {
         tracing::warn!("plugin data dir {}: {e}", dir.display());
     }

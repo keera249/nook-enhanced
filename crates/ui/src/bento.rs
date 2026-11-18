@@ -138,14 +138,15 @@ fn tile_glass(painter: &egui::Painter, rect: Rect, theme: &Theme, active: bool, 
     // Hover brightens the top of the gradient a touch.
     let top = theme::mix(top, with_alpha(theme.text, 0.16), lift * 0.4);
     paint::fill_gradient(painter, &outline, top, bottom);
-    painter.add(egui::epaint::PathShape::closed_line(
-        outline,
-        egui::epaint::PathStroke::new(1.0, theme.tile_rim),
-    ));
     if theme.liquid_glass {
-        paint::tile_liquid_sheen(painter, rect, theme, lift);
+        paint::tile_liquid_sheen(painter, rect, theme, active, lift);
+    } else {
+        painter.add(egui::epaint::PathShape::closed_line(
+            outline,
+            egui::epaint::PathStroke::new(1.0, theme.tile_rim),
+        ));
+        paint::top_highlight(painter, &shape, with_alpha(theme.highlight, 0.5));
     }
-    paint::top_highlight(painter, &shape, with_alpha(theme.highlight, 0.5));
 }
 
 fn tile_inner(rect: Rect, size: TileSize) -> Rect {
@@ -711,11 +712,11 @@ fn edit_face(ui: &mut Ui, rect: Rect, tile: &GridTile<'_>, theme: &Theme) -> Opt
         );
     }
     let tip = if locked {
-        "Always shown"
+        crate::i18n::tr("Always shown")
     } else if shown {
-        "Shown. Click to hide"
+        crate::i18n::tr("Shown. Click to hide")
     } else {
-        "Hidden. Click to show"
+        crate::i18n::tr("Hidden. Click to show")
     };
     if tick.on_hover_text(tip).clicked() && !locked {
         edit = Some(Edit::ToggleShown(tile.module.id()));
@@ -763,10 +764,15 @@ fn edit_face(ui: &mut Ui, rect: Rect, tile: &GridTile<'_>, theme: &Theme) -> Opt
             TileSize::Wide => "Wide",
             TileSize::Large => "Large",
         };
+        let label_tr = crate::i18n::tr(label);
         let tip = if s.area() < native.area() {
-            format!("{label}: compact, click it to open")
+            if crate::i18n::is_arabic() {
+                crate::arabic::shape_bidi(&format!("{}: مصغر، انقر للفتح", crate::i18n::translate_ar(label)))
+            } else {
+                format!("{label}: compact, click it to open")
+            }
         } else {
-            label.to_owned()
+            label_tr
         };
         if resp.on_hover_text(tip).clicked() && !selected {
             edit = Some(Edit::Resize(tile.module.id(), s));
@@ -812,7 +818,7 @@ fn compact_tile(ui: &mut Ui, inner: Rect, module: &dyn Module, theme: &Theme, ho
             painter.text(
                 pos2(x, inner.center().y + 8.0),
                 Align2::LEFT_CENTER,
-                crate::arabic::shape_bidi(sub),
+                crate::i18n::tr(sub),
                 Theme::font(SIZE_LABEL - 1.0),
                 theme.text_dim,
             );
@@ -824,7 +830,7 @@ fn compact_tile(ui: &mut Ui, inner: Rect, module: &dyn Module, theme: &Theme, ho
             painter.text(
                 inner.center() + vec2(0.0, 13.0),
                 Align2::CENTER_CENTER,
-                l,
+                crate::i18n::tr(&l),
                 Theme::font(SIZE_LABEL - 2.0),
                 theme.text_dim,
             );
@@ -850,7 +856,7 @@ fn coming_soon(ui: &mut Ui, inner: Rect, icon: &'static str, theme: &Theme, hove
         painter.text(
             c,
             Align2::CENTER_CENTER,
-            "Soon",
+            crate::i18n::tr("Soon"),
             Theme::font_semibold(SIZE_LABEL),
             with_alpha(theme.text_dim, t),
         );

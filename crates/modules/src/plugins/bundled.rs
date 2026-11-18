@@ -14,6 +14,7 @@ pub struct BundledPlugin {
     pub files: &'static [BundledFile],
 }
 
+#[cfg(windows)]
 pub static BUNDLED_PLUGINS: &[BundledPlugin] = &[
     BundledPlugin {
         id: "prayer-times",
@@ -102,13 +103,94 @@ pub static BUNDLED_PLUGINS: &[BundledPlugin] = &[
     },
 ];
 
-/// Ensures all bundled plugins exist in `%APPDATA%\Nook\plugins`.
+#[cfg(target_os = "linux")]
+pub static BUNDLED_PLUGINS: &[BundledPlugin] = &[
+    BundledPlugin {
+        id: "prayer-times",
+        files: &[
+            BundledFile {
+                name: "plugin.toml",
+                bytes: include_bytes!("../../../../plugins/prayer-times/plugin.linux.toml"),
+            },
+            BundledFile {
+                name: "prayer_linux.py",
+                bytes: include_bytes!("../../../../plugins/prayer-times/prayer_linux.py"),
+            },
+            BundledFile {
+                name: "athkar.json",
+                bytes: include_bytes!("../../../../plugins/prayer-times/athkar.json"),
+            },
+            BundledFile {
+                name: "prayer-icon.png",
+                bytes: include_bytes!("../../../../plugins/prayer-times/prayer-icon.png"),
+            },
+        ],
+    },
+    BundledPlugin {
+        id: "game-launcher",
+        files: &[
+            BundledFile {
+                name: "plugin.toml",
+                bytes: include_bytes!("../../../../plugins/game-launcher/plugin.linux.toml"),
+            },
+            BundledFile {
+                name: "launcher_linux.py",
+                bytes: include_bytes!("../../../../plugins/game-launcher/launcher_linux.py"),
+            },
+        ],
+    },
+    BundledPlugin {
+        id: "volume-mixer",
+        files: &[
+            BundledFile {
+                name: "plugin.toml",
+                bytes: include_bytes!("../../../../plugins/volume-mixer/plugin.linux.toml"),
+            },
+            BundledFile {
+                name: "mixer_linux.py",
+                bytes: include_bytes!("../../../../plugins/volume-mixer/mixer_linux.py"),
+            },
+        ],
+    },
+    BundledPlugin {
+        id: "power-mode",
+        files: &[
+            BundledFile {
+                name: "plugin.toml",
+                bytes: include_bytes!("../../../../plugins/power-mode/plugin.linux.toml"),
+            },
+            BundledFile {
+                name: "power_linux.py",
+                bytes: include_bytes!("../../../../plugins/power-mode/power_linux.py"),
+            },
+        ],
+    },
+    BundledPlugin {
+        id: "dawwar",
+        files: &[
+            BundledFile {
+                name: "plugin.toml",
+                bytes: include_bytes!("../../../../plugins/dawwar/plugin.linux.toml"),
+            },
+            BundledFile {
+                name: "dawwar_linux.py",
+                bytes: include_bytes!("../../../../plugins/dawwar/dawwar_linux.py"),
+            },
+            BundledFile {
+                name: "dawwar-icon.png",
+                bytes: include_bytes!("../../../../plugins/dawwar/dawwar-icon.png"),
+            },
+        ],
+    },
+];
+
+/// Ensures all bundled plugins exist in Nook's plugins directory.
 /// If files are missing or updated in this build, writes them out safely.
 pub fn ensure_installed() {
-    let Some(appdata) = std::env::var_os("APPDATA") else {
+    let Some(cfg) = nook_platform::files::config_dir() else {
         return;
     };
-    let plugins_dir = PathBuf::from(appdata).join("Nook").join("plugins");
+    let plugins_dir = cfg.join("plugins");
 
     for plugin in BUNDLED_PLUGINS {
         let target_dir = plugins_dir.join(plugin.id);

@@ -121,18 +121,18 @@ impl Theme {
             None => base,
         };
         let ink_alpha = if translucent {
-            if liquid { 0.82 } else { 0.90 }
+            if liquid { 0.86 } else { 0.90 }
         } else {
             1.0
         };
         let ink = if liquid {
             Ink {
-                pill_top: with_alpha(Color32::from_rgb(30, 32, 40), ink_alpha),
-                pill_bottom: with_alpha(Color32::from_rgb(8, 9, 14), ink_alpha),
-                pill_rim: Color32::from_rgba_unmultiplied(255, 255, 255, 52),
-                pill_highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 120),
+                pill_top: with_alpha(Color32::from_rgb(20, 22, 28), ink_alpha),
+                pill_bottom: with_alpha(Color32::from_rgb(7, 8, 12), ink_alpha),
+                pill_rim: Color32::from_rgba_unmultiplied(255, 255, 255, 62),
+                pill_highlight: Color32::from_rgba_unmultiplied(255, 255, 255, 115),
                 pill_text: Color32::from_rgb(248, 248, 252),
-                pill_text_dim: Color32::from_rgb(165, 170, 185),
+                pill_text_dim: Color32::from_rgb(168, 174, 188),
             }
         } else {
             Ink {
@@ -147,8 +147,8 @@ impl Theme {
         if dark {
             let (glass_top, glass_bottom) = if liquid {
                 (
-                    with_alpha(tinted(Color32::from_rgb(46, 50, 62), 0.35), glass_alpha),
-                    with_alpha(tinted(Color32::from_rgb(10, 12, 18), 0.25), glass_alpha * 0.85),
+                    with_alpha(tinted(Color32::from_rgb(54, 60, 74), 0.30), glass_alpha),
+                    with_alpha(tinted(Color32::from_rgb(10, 12, 18), 0.22), glass_alpha * 0.88),
                 )
             } else {
                 (
@@ -158,8 +158,8 @@ impl Theme {
             };
             let (rim, highlight) = if liquid {
                 (
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 48),
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 190),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 64),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 165),
                 )
             } else {
                 (
@@ -169,9 +169,9 @@ impl Theme {
             };
             let (tile_top, tile_bottom, tile_rim) = if liquid {
                 (
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 36),
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 12),
-                    Color32::from_rgba_unmultiplied(255, 255, 255, 30),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 34),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 11),
+                    Color32::from_rgba_unmultiplied(255, 255, 255, 38),
                 )
             } else {
                 (
@@ -261,8 +261,98 @@ impl Theme {
         )
     }
 
+    /// 4-stop vertical optical profile (0.0, 0.26, 0.72, 1.0) for hardware-composited
+    /// Liquid Glass and fallback rendering.
+    pub fn glass_stops_at(&self, progress: f32, flat_top: bool) -> [Color32; 4] {
+        let (top, bottom) = self.glass_at(progress);
+        if !self.liquid_glass {
+            return [
+                top,
+                mix(top, bottom, 0.26),
+                mix(top, bottom, 0.72),
+                bottom,
+            ];
+        }
+        let t = blend(progress);
+        // Pill stops: when flat_top (hardware notch flush with screen bezel),
+        // keep y=0 deep obsidian ink and gather subtle sheen toward the curved bottom.
+        let pill_stops = if flat_top {
+            let deep = self.pill_bottom;
+            let mid = mix(self.pill_bottom, self.pill_top, 0.45);
+            let curve = mix(self.pill_top, mix(self.accent, Color32::WHITE, 0.55), 0.10);
+            [deep, deep, mid, curve]
+        } else {
+            let crown = mix(self.pill_top, Color32::WHITE, 0.08);
+            let body = self.pill_bottom;
+            let floor = mix(self.pill_bottom, self.pill_top, 0.55);
+            [crown, body, body, floor]
+        };
+
+        // Expanded panel stops: refractive crown -> ultra-clear lens -> optical body -> caustic floor.
+        let panel_crown = if flat_top {
+            self.glass_top
+        } else if self.dark {
+            mix(self.glass_top, Color32::from_rgba_unmultiplied(255, 255, 255, 140), 0.18)
+        } else {
+            mix(self.glass_top, Color32::WHITE, 0.35)
+        };
+        let panel_upper = with_alpha(mix(self.glass_top, self.glass_bottom, 0.38), 0.84);
+        let panel_lower = mix(self.glass_top, self.glass_bottom, 0.78);
+        let caustic_tint = mix(self.glass_bottom, self.accent, if self.dark { 0.14 } else { 0.08 });
+        let panel_floor = mix(self.glass_bottom, caustic_tint, 0.65);
+        let panel_stops = [panel_crown, panel_upper, panel_lower, panel_floor];
+
+        [
+            mix(pill_stops[0], panel_stops[0], t),
+            mix(pill_stops[1], panel_stops[1], t),
+            mix(pill_stops[2], panel_stops[2], t),
+            mix(pill_stops[3], panel_stops[3], t),
+        ]
+    }
+
     pub fn rim_at(&self, progress: f32) -> Color32 {
         mix(self.pill_rim, self.rim, blend(progress))
+    }
+
+    /// 3-stop vertical Fresnel rim (top specular, side glass, bottom caustic bounce).
+    pub fn rim_stops_at(&self, progress: f32, flat_top: bool) -> [Color32; 3] {
+        let base = self.rim_at(progress);
+        if !self.liquid_glass {
+            return [base, base, base];
+        }
+        let t = blend(progress);
+        let caustic_rgb = mix(Color32::WHITE, self.accent, 0.26);
+        let [cr, cg, cb, _] = caustic_rgb.to_srgba_unmultiplied();
+
+        let top_a = if flat_top {
+            (18.0 + 30.0 * t).round() as u8
+        } else if self.dark {
+            (105.0 + 35.0 * t).round() as u8
+        } else {
+            (175.0 + 45.0 * t).round() as u8
+        };
+        let mid_a = if self.dark {
+            (28.0 + 12.0 * t).round() as u8
+        } else {
+            (55.0 + 25.0 * t).round() as u8
+        };
+        let bot_a = if flat_top {
+            if self.dark {
+                (92.0 - 14.0 * t).round() as u8
+            } else {
+                140
+            }
+        } else if self.dark {
+            (68.0 + 14.0 * t).round() as u8
+        } else {
+            115
+        };
+
+        [
+            Color32::from_rgba_unmultiplied(255, 255, 255, top_a),
+            Color32::from_rgba_unmultiplied(255, 255, 255, mid_a),
+            Color32::from_rgba_unmultiplied(cr, cg, cb, bot_a),
+        ]
     }
 
     pub fn highlight_at(&self, progress: f32) -> Color32 {
